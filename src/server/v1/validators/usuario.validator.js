@@ -1,11 +1,12 @@
 const Joi = require('joi');
 const { emailSchema } = require('./email.validator');
 const { passwordSchema } = require('./password.validator');
+const { cedulaSchema } = require('./cedula.validator'); 
 
 const altaUsuarioSchema = Joi.object({
   nombre: Joi.string().trim().min(1).max(100).required(),
   apellido: Joi.string().trim().min(1).max(100).required(),
-  documento: Joi.string().trim().min(1).max(20).required(),
+  documento: cedulaSchema.required(),
   email: emailSchema.required(),
   password: passwordSchema.required(),
   fechaNacimiento: Joi.string()
