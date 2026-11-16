@@ -45,4 +45,32 @@ const altaUsuarioAdminSchema = Joi.object({
     }),
 });
 
-module.exports = { altaUsuarioSchema, altaUsuarioAdminSchema, ROLES };
+// CU01 (RF1): edición por el administrador. Body parcial (al menos un campo).
+// La contraseña no se cambia por acá (ver restablecimiento) ni el estado.
+const editarUsuarioSchema = altaUsuarioAdminSchema
+  .fork(['nombre', 'apellido', 'documento', 'email', 'rol'], (campo) =>
+    campo.optional(),
+  )
+  .keys({
+    password: Joi.forbidden().messages({
+      'any.unknown': 'La contraseña no se puede modificar por esta vía',
+    }),
+  })
+  .min(1)
+  .messages({
+    'object.min': 'Indicá al menos un dato para modificar',
+  });
+
+const idUsuarioSchema = Joi.number().integer().positive().required().messages({
+  'number.base': 'El id del usuario debe ser un número',
+  'number.integer': 'El id del usuario debe ser un número entero',
+  'number.positive': 'El id del usuario debe ser positivo',
+});
+
+module.exports = {
+  altaUsuarioSchema,
+  altaUsuarioAdminSchema,
+  editarUsuarioSchema,
+  idUsuarioSchema,
+  ROLES,
+};

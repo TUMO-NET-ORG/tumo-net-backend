@@ -115,6 +115,51 @@ async function crearUsuarioPorAdmin(datos) {
   }
 }
 
+// CU01 (RF1): el administrador edita los datos de un usuario, incluido el
+// rol. El cambio de rol aplica en la próxima petición del usuario, porque el
+// middleware lee el rol desde la base y no desde el token.
+async function editarUsuarioPorAdmin(id, cambios, admin) {
+  const usuario = await usuarioRepository.buscarPorId(id);
+
+  if (!usuario) {
+    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
+  }
+
+  if (
+    id === admin.id &&
+    cambios.rol !== undefined &&
+    cambios.rol !== 'administrador'
+  ) {
+    throw new AppError(
+      400,
+      'No podés quitarte a vos mismo el rol de administrador',
+      'AUTO_CAMBIO_ROL',
+    );
+  }
+
+  const { rol, ...datos } = cambios;
+
+  if (rol !== undefined) {
+    const ids = await usuarioRepository.buscarIdsPorCodigo(rol, 'activo');
+
+    if (!ids || ids.id_rol === null) {
+      throw new AppError(400, 'El rol indicado no existe', 'ROL_INVALIDO');
+    }
+
+    datos.idRol = ids.id_rol;
+  }
+
+  try {
+    return await usuarioRepository.actualizar(id, datos);
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      throw errorDuplicado(error);
+    }
+
+    throw error;
+  }
+}
+
 // Genera un código nuevo para un usuario que quedó pendiente de verificación
 // (por ejemplo, si el mail del registro no llegó o el código venció).
 // Responde igual exista o no la cuenta, para no revelar emails registrados.
@@ -150,5 +195,6 @@ async function reenviarCodigoVerificacion(email) {
 module.exports = {
   crearUsuarioPorAdmin,
   darDeAltaUsuario,
+  editarUsuarioPorAdmin,
   reenviarCodigoVerificacion,
 };
