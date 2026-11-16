@@ -35,6 +35,10 @@
 			"value": ""
 		},
 		{
+			"key": "admin_id",
+			"value": ""
+		},
+		{
 			"key": "alta_admin_id",
 			"value": ""
 		},
@@ -171,7 +175,8 @@
 									"  pm.expect(respuesta.usuario.rol).to.eql('administrador');",
 									"});",
 									"// Se guarda el token para las rutas de administración (CU01)",
-									"pm.collectionVariables.set('admin_jwt_token', respuesta.token);"
+									"pm.collectionVariables.set('admin_jwt_token', respuesta.token);",
+									"pm.collectionVariables.set('admin_id', respuesta.usuario.id);"
 								]
 							}
 						}
@@ -1834,6 +1839,483 @@
 							"type": "noauth"
 						},
 						"description": "RNF12: la ruta requiere sesión iniciada."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "estado - suspender usuario (200)",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/{{alta_admin_id}}/estado",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"{{alta_admin_id}}",
+								"estado"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "CU01 flujo 3.b (RF2): el administrador suspende al usuario. Ejecutar en orden, después de \"alta por administrador (201)\".",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"estado\": \"suspendido\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"pm.test('queda en estado suspendido', function () {",
+									"  pm.expect(pm.response.json().usuario.estado).to.eql('suspendido');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "estado - login de usuario suspendido (403)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/login",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Un usuario que no está activo no puede iniciar sesión, aunque la contraseña sea correcta.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{alta_admin_email}}\",\n  \"password\": \"{{alta_admin_password}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 403', function () { pm.response.to.have.status(403); });",
+									"pm.test('informa que la cuenta no está activa', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('USUARIO_NO_ACTIVO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "estado - dar de baja (200)",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/{{alta_admin_id}}/estado",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"{{alta_admin_id}}",
+								"estado"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Baja lógica: el registro no se borra, solo cambia el estado (RNF15). Ejecutar en orden, después de \"alta por administrador (201)\".",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"estado\": \"dado_de_baja\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"pm.test('queda en estado dado_de_baja', function () {",
+									"  pm.expect(pm.response.json().usuario.estado).to.eql('dado_de_baja');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "estado - listado sin filtro no muestra la baja (200)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios?busqueda={{alta_admin_email}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios"
+							],
+							"query": [
+								{
+									"key": "busqueda",
+									"value": "{{alta_admin_email}}"
+								}
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Sin filtro de estado, el listado excluye a los dados de baja."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const emails = pm.response.json().usuarios.map((u) => u.email);",
+									"const email = pm.collectionVariables.get('alta_admin_email');",
+									"pm.test('no aparece el usuario dado de baja', function () {",
+									"  pm.expect(emails).to.not.include(email);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "estado - listado de dados de baja (200)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios?estado=dado_de_baja&busqueda={{alta_admin_email}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios"
+							],
+							"query": [
+								{
+									"key": "estado",
+									"value": "dado_de_baja"
+								},
+								{
+									"key": "busqueda",
+									"value": "{{alta_admin_email}}"
+								}
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Filtrando por estado=dado_de_baja sí aparecen."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const emails = pm.response.json().usuarios.map((u) => u.email);",
+									"const email = pm.collectionVariables.get('alta_admin_email');",
+									"pm.test('aparece el usuario dado de baja', function () {",
+									"  pm.expect(emails).to.include(email);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "estado - reactivar usuario (200)",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/{{alta_admin_id}}/estado",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"{{alta_admin_id}}",
+								"estado"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Vuelve a activo para poder seguir con los requests de \"primer ingreso\". Ejecutar en orden, después de \"alta por administrador (201)\".",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"estado\": \"activo\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"pm.test('queda en estado activo', function () {",
+									"  pm.expect(pm.response.json().usuario.estado).to.eql('activo');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "estado - valor invalido (400)",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/{{alta_admin_id}}/estado",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"{{alta_admin_id}}",
+								"estado"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Solo se aceptan activo, inactivo, suspendido y dado_de_baja.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"estado\": \"borrado\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('detalla el campo estado', function () {",
+									"  const respuesta = pm.response.json();",
+									"  pm.expect(respuesta.error).to.eql('DATOS_INVALIDOS');",
+									"  pm.expect(respuesta.detalles.map((d) => d.campo)).to.include('estado');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "estado - cambiar el propio estado (400)",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/{{admin_id}}/estado",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"{{admin_id}}",
+								"estado"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "El administrador no puede cambiar su propio estado. admin_id lo guarda \"login administrador\".",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"estado\": \"inactivo\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('informa que no puede cambiar su propio estado', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('AUTO_CAMBIO_ESTADO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "estado - sin token (401)",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/{{alta_admin_id}}/estado",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"{{alta_admin_id}}",
+								"estado"
+							]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "RNF12: la ruta requiere sesión iniciada.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"estado\": \"suspendido\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
 					},
 					"response": [],
 					"event": [

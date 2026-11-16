@@ -15,6 +15,13 @@ const ESTADOS = [
   'dado_de_baja',
 ];
 
+// CU01 (flujo 3.b): estados que el administrador puede asignar. La baja es
+// lógica (`dado_de_baja`): el registro nunca se borra, así que sus datos,
+// publicaciones y comentarios se conservan. Solo `activo` puede iniciar
+// sesión; los listados de la comunidad deben mostrar únicamente usuarios
+// activos.
+const ESTADOS_ADMINISTRABLES = ['activo', 'inactivo', 'suspendido', 'dado_de_baja'];
+
 const datosPersonales = {
   nombre: Joi.string().trim().min(1).max(100).required(),
   apellido: Joi.string().trim().min(1).max(100).required(),
@@ -91,8 +98,20 @@ const listarUsuariosSchema = Joi.object({
   tamanioPagina: Joi.number().integer().min(1).max(100).default(20),
 });
 
+const cambiarEstadoSchema = Joi.object({
+  estado: Joi.string()
+    .valid(...ESTADOS_ADMINISTRABLES)
+    .required()
+    .messages({
+      'any.only': `El estado debe ser uno de: ${ESTADOS_ADMINISTRABLES.join(', ')}`,
+      'any.required': 'Indicá el estado',
+    }),
+});
+
 module.exports = {
   ESTADOS,
+  ESTADOS_ADMINISTRABLES,
+  cambiarEstadoSchema,
   listarUsuariosSchema,
   altaUsuarioSchema,
   altaUsuarioAdminSchema,

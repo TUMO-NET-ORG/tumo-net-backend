@@ -160,6 +160,38 @@ async function editarUsuarioPorAdmin(id, cambios, admin) {
   }
 }
 
+// CU01 (flujo 3.b, RF2): el administrador cambia el estado de un usuario.
+// Al dejar de estar activo no puede iniciar sesión, y el token que ya tenía
+// deja de servir en su próxima petición (el middleware lee el estado de la
+// base).
+async function cambiarEstadoPorAdmin(id, estado, admin) {
+  if (id === admin.id) {
+    throw new AppError(
+      400,
+      'No podés cambiar tu propio estado',
+      'AUTO_CAMBIO_ESTADO',
+    );
+  }
+
+  const usuario = await usuarioRepository.buscarPorId(id);
+
+  if (!usuario) {
+    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
+  }
+
+  const idEstado = await usuarioRepository.buscarIdEstadoPorCodigo(estado);
+
+  if (idEstado === null) {
+    throw new AppError(
+      500,
+      'La configuración inicial de roles y estados está incompleta',
+      'CONFIGURACION_USUARIO_INCOMPLETA',
+    );
+  }
+
+  return usuarioRepository.actualizarEstado(id, idEstado);
+}
+
 // CU01 (flujo principal, paso 2): listado paginado para el administrador.
 async function listarUsuarios({ busqueda, rol, estado, pagina, tamanioPagina }) {
   const { usuarios, total } = await usuarioRepository.listar({
@@ -214,6 +246,7 @@ async function reenviarCodigoVerificacion(email) {
 }
 
 module.exports = {
+  cambiarEstadoPorAdmin,
   crearUsuarioPorAdmin,
   darDeAltaUsuario,
   editarUsuarioPorAdmin,

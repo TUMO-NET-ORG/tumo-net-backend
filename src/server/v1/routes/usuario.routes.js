@@ -4,6 +4,7 @@ const {
   crearUsuarioAdmin,
   editarUsuarioAdmin,
   listarUsuariosAdmin,
+  cambiarEstadoAdmin,
 } = require('../controllers/usuario.controller');
 const { autenticar } = require('../middleware/auth.middleware');
 const { requerirRol } = require('../middleware/rol.middleware');
@@ -25,6 +26,14 @@ router.patch(
   autenticar,
   requerirRol('administrador'),
   editarUsuarioAdmin,
+);
+
+// CU01 (flujo 3.b, RF2): cambio de estado y baja lógica (RNF12).
+router.patch(
+  '/:id/estado',
+  autenticar,
+  requerirRol('administrador'),
+  cambiarEstadoAdmin,
 );
 
 module.exports = router;

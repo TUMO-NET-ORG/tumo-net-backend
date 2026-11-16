@@ -198,8 +198,29 @@ async function listar({ busqueda, rol, estado, limite, offset }) {
   return { usuarios, total: Number(conteo[0].total) };
 }
 
+async function buscarIdEstadoPorCodigo(codigo) {
+  const [filas] = await pool.execute(
+    'SELECT id FROM estado_usuario WHERE codigo = ?',
+    [codigo],
+  );
+
+  return filas[0] ? filas[0].id : null;
+}
+
+// CU01 (flujo 3.b): cambio de estado. La baja es lógica: el registro no se borra.
+async function actualizarEstado(id, idEstado) {
+  await pool.execute('UPDATE usuarios SET id_estado = ? WHERE id = ?', [
+    idEstado,
+    id,
+  ]);
+
+  return buscarPublicoPorId(pool, id);
+}
+
 module.exports = {
   actualizar,
+  actualizarEstado,
+  buscarIdEstadoPorCodigo,
   listar,
   buscarIdsPorCodigo,
   buscarPorId,

@@ -4,12 +4,14 @@ const {
   editarUsuarioSchema,
   idUsuarioSchema,
   listarUsuariosSchema,
+  cambiarEstadoSchema,
 } = require('../validators/usuario.validator');
 const {
   darDeAltaUsuario,
   crearUsuarioPorAdmin,
   editarUsuarioPorAdmin,
   listarUsuarios,
+  cambiarEstadoPorAdmin,
 } = require('../services/usuario.service');
 
 function responderDatosInvalidos(res, error) {
@@ -49,15 +51,19 @@ async function crearUsuarioAdmin(req, res) {
   return res.status(201).json({ usuario });
 }
 
+function responderIdInvalido(res, error) {
+  return res.status(400).json({
+    error: 'DATOS_INVALIDOS',
+    detalles: [{ campo: 'id', mensaje: error.message }],
+  });
+}
+
 // CU01 (RF1): edición de datos por el administrador.
 async function editarUsuarioAdmin(req, res) {
   const validacionId = idUsuarioSchema.validate(req.params.id);
 
   if (validacionId.error) {
-    return res.status(400).json({
-      error: 'DATOS_INVALIDOS',
-      detalles: [{ campo: 'id', mensaje: validacionId.error.message }],
-    });
+    return responderIdInvalido(res, validacionId.error);
   }
 
   const validacion = editarUsuarioSchema.validate(req.body ?? {}, {
@@ -90,7 +96,32 @@ async function listarUsuariosAdmin(req, res) {
   return res.status(200).json(resultado);
 }
 
+// CU01 (flujo 3.b): cambio de estado por el administrador.
+async function cambiarEstadoAdmin(req, res) {
+  const validacionId = idUsuarioSchema.validate(req.params.id);
+
+  if (validacionId.error) {
+    return responderIdInvalido(res, validacionId.error);
+  }
+
+  const validacion = cambiarEstadoSchema.validate(req.body ?? {}, {
+    abortEarly: false,
+  });
+
+  if (validacion.error) {
+    return responderDatosInvalidos(res, validacion.error);
+  }
+
+  const usuario = await cambiarEstadoPorAdmin(
+    validacionId.value,
+    validacion.value.estado,
+    req.usuario,
+  );
+  return res.status(200).json({ usuario });
+}
+
 module.exports = {
+  cambiarEstadoAdmin,
   crearUsuario,
   crearUsuarioAdmin,
   editarUsuarioAdmin,

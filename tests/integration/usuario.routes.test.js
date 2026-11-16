@@ -284,3 +284,87 @@ describe('GET /api/v1/usuarios (CU01 – listado con búsqueda y filtros)', () =
     expect(usuarioRepository.listar).not.toHaveBeenCalled();
   });
 });
+
+describe('PATCH /api/v1/usuarios/:id/estado (CU01 – flujo 3.b)', () => {
+  const URL_ESTADO = `${URL}/15/estado`;
+
+  beforeEach(() => {
+    usuarioRepository.buscarPorId.mockResolvedValue({ id: 15, rol: 'staff', estado: 'activo' });
+    usuarioRepository.buscarIdEstadoPorCodigo.mockResolvedValue(3);
+    usuarioRepository.actualizarEstado.mockResolvedValue({
+      id: 15,
+      rol: 'staff',
+      estado: 'suspendido',
+    });
+  });
+
+  test('sin token responde 401', async () => {
+    const res = await request(app).patch(URL_ESTADO).send({ estado: 'suspendido' });
+
+    expect(res.status).toBe(401);
+    expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  test.each(['alumno', 'staff', 'tutor'])('con rol %s responde 403 (RNF12)', async (rol) => {
+    const res = await request(app)
+      .patch(URL_ESTADO)
+      .set('Authorization', `Bearer ${sesion(rol)}`)
+      .send({ estado: 'suspendido' });
+
+    expect(res.status).toBe(403);
+    expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  test('como administrador cambia el estado y responde 200', async () => {
+    const res = await request(app)
+      .patch(URL_ESTADO)
+      .set('Authorization', `Bearer ${sesion('administrador')}`)
+      .send({ estado: 'suspendido' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.usuario).toMatchObject({ id: 15, estado: 'suspendido' });
+    expect(usuarioRepository.buscarIdEstadoPorCodigo).toHaveBeenCalledWith('suspendido');
+    expect(usuarioRepository.actualizarEstado).toHaveBeenCalledWith(15, 3);
+  });
+
+  test.each([
+    ['un estado inexistente', '/15/estado', { estado: 'borrado' }, 'estado'],
+    ['pendiente_verificacion', '/15/estado', { estado: 'pendiente_verificacion' }, 'estado'],
+    ['sin estado', '/15/estado', {}, 'estado'],
+    ['campos extra', '/15/estado', { estado: 'activo', rol: 'staff' }, 'rol'],
+    ['id no numérico', '/abc/estado', { estado: 'activo' }, 'id'],
+  ])('con %s responde 400', async (_caso, ruta, body, campo) => {
+    const res = await request(app)
+      .patch(`${URL}${ruta}`)
+      .set('Authorization', `Bearer ${sesion('administrador')}`)
+      .send(body);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('DATOS_INVALIDOS');
+    expect(res.body.detalles.map((d) => d.campo)).toContain(campo);
+    expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  test('el administrador no puede cambiar su propio estado', async () => {
+    const res = await request(app)
+      .patch(`${URL}/1/estado`)
+      .set('Authorization', `Bearer ${sesion('administrador')}`)
+      .send({ estado: 'inactivo' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('AUTO_CAMBIO_ESTADO');
+    expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  test('si el usuario no existe responde 404', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(undefined);
+
+    const res = await request(app)
+      .patch(`${URL}/999/estado`)
+      .set('Authorization', `Bearer ${sesion('administrador')}`)
+      .send({ estado: 'dado_de_baja' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('USUARIO_NO_ENCONTRADO');
+  });
+});
