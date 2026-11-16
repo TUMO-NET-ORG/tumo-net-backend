@@ -368,3 +368,77 @@ describe('PATCH /api/v1/usuarios/:id/estado (CU01 – flujo 3.b)', () => {
     expect(res.body.error).toBe('USUARIO_NO_ENCONTRADO');
   });
 });
+
+describe('POST /api/v1/usuarios/:id/restablecer-password (CU01 – flujo 3.a)', () => {
+  const { passwordSchema } = require('../../src/server/v1/validators/password.validator');
+  const URL_RESTABLECER = `${URL}/15/restablecer-password`;
+
+  beforeEach(() => {
+    usuarioRepository.buscarPorId.mockResolvedValue({ id: 15, rol: 'staff', estado: 'activo' });
+    usuarioRepository.restablecerPasswordTemporal.mockResolvedValue({
+      id: 15,
+      rol: 'staff',
+      estado: 'activo',
+    });
+  });
+
+  test('sin token responde 401', async () => {
+    const res = await request(app).post(URL_RESTABLECER);
+
+    expect(res.status).toBe(401);
+    expect(usuarioRepository.restablecerPasswordTemporal).not.toHaveBeenCalled();
+  });
+
+  test.each(['alumno', 'staff', 'tutor'])('con rol %s responde 403 (RNF12)', async (rol) => {
+    const res = await request(app)
+      .post(URL_RESTABLECER)
+      .set('Authorization', `Bearer ${sesion(rol)}`);
+
+    expect(res.status).toBe(403);
+    expect(usuarioRepository.restablecerPasswordTemporal).not.toHaveBeenCalled();
+  });
+
+  test('como administrador devuelve la temporal una vez y sin caché', async () => {
+    const res = await request(app)
+      .post(URL_RESTABLECER)
+      .set('Authorization', `Bearer ${sesion('administrador')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body.usuario).toMatchObject({ id: 15 });
+    expect(res.body.usuario).not.toHaveProperty('passwordHash');
+    expect(passwordSchema.validate(res.body.passwordTemporal).error).toBeUndefined();
+
+    const [, hash] = usuarioRepository.restablecerPasswordTemporal.mock.calls[0];
+    expect(hash).not.toBe(res.body.passwordTemporal);
+  });
+
+  test('con id inválido responde 400', async () => {
+    const res = await request(app)
+      .post(`${URL}/abc/restablecer-password`)
+      .set('Authorization', `Bearer ${sesion('administrador')}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.detalles.map((d) => d.campo)).toContain('id');
+  });
+
+  test('el administrador no puede restablecer su propia contraseña', async () => {
+    const res = await request(app)
+      .post(`${URL}/1/restablecer-password`)
+      .set('Authorization', `Bearer ${sesion('administrador')}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('AUTO_RESTABLECER_PASSWORD');
+  });
+
+  test('si el usuario no existe responde 404', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(undefined);
+
+    const res = await request(app)
+      .post(`${URL}/999/restablecer-password`)
+      .set('Authorization', `Bearer ${sesion('administrador')}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('USUARIO_NO_ENCONTRADO');
+  });
+});

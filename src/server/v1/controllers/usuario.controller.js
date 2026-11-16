@@ -12,6 +12,7 @@ const {
   editarUsuarioPorAdmin,
   listarUsuarios,
   cambiarEstadoPorAdmin,
+  restablecerPasswordPorAdmin,
 } = require('../services/usuario.service');
 
 function responderDatosInvalidos(res, error) {
@@ -120,8 +121,27 @@ async function cambiarEstadoAdmin(req, res) {
   return res.status(200).json({ usuario });
 }
 
+// CU01 (flujo 3.a, RF4): restablecimiento con contraseña temporal.
+async function restablecerPasswordAdmin(req, res) {
+  const validacionId = idUsuarioSchema.validate(req.params.id);
+
+  if (validacionId.error) {
+    return responderIdInvalido(res, validacionId.error);
+  }
+
+  const resultado = await restablecerPasswordPorAdmin(
+    validacionId.value,
+    req.usuario,
+  );
+
+  // La contraseña temporal se muestra una sola vez: que no quede en cachés.
+  res.set('Cache-Control', 'no-store');
+  return res.status(200).json(resultado);
+}
+
 module.exports = {
   cambiarEstadoAdmin,
+  restablecerPasswordAdmin,
   crearUsuario,
   crearUsuarioAdmin,
   editarUsuarioAdmin,

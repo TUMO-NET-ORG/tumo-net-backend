@@ -5,6 +5,7 @@ const {
   editarUsuarioAdmin,
   listarUsuariosAdmin,
   cambiarEstadoAdmin,
+  restablecerPasswordAdmin,
 } = require('../controllers/usuario.controller');
 const { autenticar } = require('../middleware/auth.middleware');
 const { requerirRol } = require('../middleware/rol.middleware');
@@ -34,6 +35,14 @@ router.patch(
   autenticar,
   requerirRol('administrador'),
   cambiarEstadoAdmin,
+);
+
+// CU01 (flujo 3.a, RF4): contraseña temporal generada por el sistema (RNF12).
+router.post(
+  '/:id/restablecer-password',
+  autenticar,
+  requerirRol('administrador'),
+  restablecerPasswordAdmin,
 );
 
 module.exports = router;
