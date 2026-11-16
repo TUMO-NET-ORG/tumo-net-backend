@@ -10,6 +10,11 @@ const app = require('../../src/app');
 const authRepository = require('../../src/server/v1/repositories/auth.repository');
 const { requerirRol } = require('../../src/server/v1/middleware/rol.middleware');
 
+// Cada intento de login calcula un hash argon2 (lento a propósito), así que
+// 21 intentos seguidos pueden superar los 5 s por defecto cuando corre toda
+// la suite en paralelo.
+const TIMEOUT_RATE_LIMIT_MS = 30000;
+
 describe('rate limit por IP', () => {
   test('/login responde 429 después de 20 intentos en 15 minutos', async () => {
     authRepository.buscarPorEmail.mockResolvedValue(undefined);
@@ -26,7 +31,7 @@ describe('rate limit por IP', () => {
     const bloqueada = await intentar();
     expect(bloqueada.status).toBe(429);
     expect(bloqueada.body.error).toBe('DEMASIADAS_SOLICITUDES');
-  });
+  }, TIMEOUT_RATE_LIMIT_MS);
 
   test('/forgot-password responde 429 después de 5 pedidos', async () => {
     authRepository.buscarPorEmail.mockResolvedValue(undefined);

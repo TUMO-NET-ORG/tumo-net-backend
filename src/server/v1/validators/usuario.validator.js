@@ -6,6 +6,15 @@ const { cedulaSchema } = require('./cedula.validator');
 // Roles definidos en RNF12 (deben coincidir con la tabla `roles`).
 const ROLES = ['administrador', 'alumno', 'staff', 'tutor'];
 
+// Estados de usuario (deben coincidir con la tabla `estado_usuario`).
+const ESTADOS = [
+  'activo',
+  'inactivo',
+  'suspendido',
+  'pendiente_verificacion',
+  'dado_de_baja',
+];
+
 const datosPersonales = {
   nombre: Joi.string().trim().min(1).max(100).required(),
   apellido: Joi.string().trim().min(1).max(100).required(),
@@ -67,7 +76,24 @@ const idUsuarioSchema = Joi.number().integer().positive().required().messages({
   'number.positive': 'El id del usuario debe ser positivo',
 });
 
+// CU01 (flujo principal, paso 2): filtros y paginación del listado.
+const listarUsuariosSchema = Joi.object({
+  busqueda: Joi.string().trim().max(100).allow(''),
+  rol: Joi.string()
+    .valid(...ROLES)
+    .messages({ 'any.only': `El rol debe ser uno de: ${ROLES.join(', ')}` }),
+  estado: Joi.string()
+    .valid(...ESTADOS)
+    .messages({
+      'any.only': `El estado debe ser uno de: ${ESTADOS.join(', ')}`,
+    }),
+  pagina: Joi.number().integer().min(1).default(1),
+  tamanioPagina: Joi.number().integer().min(1).max(100).default(20),
+});
+
 module.exports = {
+  ESTADOS,
+  listarUsuariosSchema,
   altaUsuarioSchema,
   altaUsuarioAdminSchema,
   editarUsuarioSchema,
