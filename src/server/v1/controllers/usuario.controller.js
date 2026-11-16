@@ -1,10 +1,13 @@
 const {
   altaUsuarioSchema,
   altaUsuarioAdminSchema,
+  editarUsuarioSchema,
+  idUsuarioSchema,
 } = require('../validators/usuario.validator');
 const {
   darDeAltaUsuario,
   crearUsuarioPorAdmin,
+  editarUsuarioPorAdmin,
 } = require('../services/usuario.service');
 
 function responderDatosInvalidos(res, error) {
@@ -44,4 +47,31 @@ async function crearUsuarioAdmin(req, res) {
   return res.status(201).json({ usuario });
 }
 
-module.exports = { crearUsuario, crearUsuarioAdmin };
+// CU01 (RF1): edición de datos por el administrador.
+async function editarUsuarioAdmin(req, res) {
+  const validacionId = idUsuarioSchema.validate(req.params.id);
+
+  if (validacionId.error) {
+    return res.status(400).json({
+      error: 'DATOS_INVALIDOS',
+      detalles: [{ campo: 'id', mensaje: validacionId.error.message }],
+    });
+  }
+
+  const validacion = editarUsuarioSchema.validate(req.body ?? {}, {
+    abortEarly: false,
+  });
+
+  if (validacion.error) {
+    return responderDatosInvalidos(res, validacion.error);
+  }
+
+  const usuario = await editarUsuarioPorAdmin(
+    validacionId.value,
+    validacion.value,
+    req.usuario,
+  );
+  return res.status(200).json({ usuario });
+}
+
+module.exports = { crearUsuario, crearUsuarioAdmin, editarUsuarioAdmin };

@@ -108,4 +108,44 @@ async function crear(usuario) {
   return buscarPublicoPorId(pool, resultado.insertId);
 }
 
-module.exports = { buscarIdsPorCodigo, crear, crearConVerificacion };
+async function buscarPorId(id) {
+  return buscarPublicoPorId(pool, id);
+}
+
+// Lista blanca de campos editables -> columna. Solo estas columnas pueden
+// aparecer en el UPDATE; los valores van siempre como parámetros (RNF08).
+const COLUMNAS_EDITABLES = {
+  nombre: 'nombre',
+  apellido: 'apellido',
+  documento: 'documento',
+  email: 'email',
+  fechaNacimiento: 'fecha_nacimiento',
+  fotoUrl: 'foto_url',
+  urlPortfolio: 'url_portfolio',
+  idRol: 'id_rol',
+};
+
+async function actualizar(id, cambios) {
+  const campos = Object.keys(cambios).filter(
+    (campo) => COLUMNAS_EDITABLES[campo] && cambios[campo] !== undefined,
+  );
+
+  if (campos.length > 0) {
+    await pool.execute(
+      `UPDATE usuarios
+       SET ${campos.map((campo) => `${COLUMNAS_EDITABLES[campo]} = ?`).join(', ')}
+       WHERE id = ?`,
+      [...campos.map((campo) => cambios[campo]), id],
+    );
+  }
+
+  return buscarPublicoPorId(pool, id);
+}
+
+module.exports = {
+  actualizar,
+  buscarIdsPorCodigo,
+  buscarPorId,
+  crear,
+  crearConVerificacion,
+};
