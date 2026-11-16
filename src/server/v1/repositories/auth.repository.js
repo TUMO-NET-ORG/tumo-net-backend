@@ -6,6 +6,7 @@ async function buscarPorEmail(email) {
        u.id, u.nombre, u.apellido, u.documento, u.email,
        u.password_hash AS passwordHash,
        u.password_version AS passwordVersion,
+       u.debe_cambiar_password AS debeCambiarPassword,
        u.intentos_fallidos AS intentosFallidos,
        u.bloqueado_hasta AS bloqueadoHasta,
        r.codigo AS rol,
@@ -55,6 +56,7 @@ async function buscarActivoPorId(id) {
     `SELECT
        u.id, u.nombre, u.apellido, u.email,
        u.password_version AS passwordVersion,
+       u.debe_cambiar_password AS debeCambiarPassword,
        r.codigo AS rol,
        e.codigo AS estado
      FROM usuarios u
@@ -211,6 +213,7 @@ async function restablecerPassword(tokenHash, passwordHash) {
       `UPDATE usuarios
        SET password_hash = ?,
            password_version = password_version + 1,
+           debe_cambiar_password = 0,
            intentos_fallidos = 0,
            bloqueado_hasta = NULL
        WHERE id = ?`,
@@ -237,6 +240,21 @@ async function restablecerPassword(tokenHash, passwordHash) {
   } finally {
     conexion.release();
   }
+}
+
+// Cambio de contraseña con sesión iniciada: invalida los tokens anteriores
+// (password_version) y levanta la obligación de cambiarla.
+async function actualizarPassword(id, passwordHash) {
+  const [resultado] = await pool.execute(
+    `UPDATE usuarios
+     SET password_hash = ?,
+         password_version = password_version + 1,
+         debe_cambiar_password = 0
+     WHERE id = ?`,
+    [passwordHash, id],
+  );
+
+  return resultado.affectedRows === 1;
 }
 
 async function crearNuevaVerificacion(usuarioId, codigoHash, fechaExpiracion) {
@@ -283,6 +301,7 @@ async function crearNuevaVerificacion(usuarioId, codigoHash, fechaExpiracion) {
 
 module.exports = {
   buscarPorEmail,
+  actualizarPassword,
   crearNuevaVerificacion,
   registrarIntentoFallido,
   reiniciarIntentos,

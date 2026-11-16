@@ -143,6 +143,7 @@ describe('rutas protegidas (RF7)', () => {
       email: 'ana@tumo.world',
       rol: 'alumno',
       estado: 'activo',
+      debeCambiarPassword: false,
     });
   });
 

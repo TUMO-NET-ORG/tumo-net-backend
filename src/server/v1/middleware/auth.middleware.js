@@ -2,7 +2,31 @@ const jwt = require('jsonwebtoken');
 const AppError = require('../errors/AppError');
 const { validarUsuarioToken } = require('../services/auth.service');
 
-async function autenticar(req, res, next) {
+// Con `permitirCambioPendiente` la ruta sigue disponible para una cuenta que
+// todavía debe cambiar su contraseña inicial (cambiarla, ver sesión, salir).
+function crearAutenticador({ permitirCambioPendiente }) {
+  return async function autenticarRequest(req, res, next) {
+    await autenticarToken(req, res, (error) => {
+      if (error) {
+        return next(error);
+      }
+
+      if (req.usuario.debeCambiarPassword && !permitirCambioPendiente) {
+        return next(
+          new AppError(
+            403,
+            'Tenés que cambiar la contraseña inicial antes de continuar',
+            'CAMBIO_PASSWORD_REQUERIDO',
+          ),
+        );
+      }
+
+      return next();
+    });
+  };
+}
+
+async function autenticarToken(req, res, next) {
   const authorization = req.headers.authorization;
   const [tipo, token] = authorization ? authorization.split(' ') : [];
 
@@ -51,4 +75,9 @@ async function autenticar(req, res, next) {
   }
 }
 
-module.exports = { autenticar };
+const autenticar = crearAutenticador({ permitirCambioPendiente: false });
+const autenticarPermitiendoCambioPendiente = crearAutenticador({
+  permitirCambioPendiente: true,
+});
+
+module.exports = { autenticar, autenticarPermitiendoCambioPendiente };

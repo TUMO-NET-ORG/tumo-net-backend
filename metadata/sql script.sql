@@ -52,6 +52,7 @@ create table usuarios (
   intentos_fallidos int unsigned not null default 0,
   bloqueado_hasta datetime null,
   password_version int unsigned not null default 0,
+  debe_cambiar_password tinyint not null default 0,
   unique key uk_usuario_email (email),
   unique key uk_usuario_documento (documento),
   constraint fk_usuario_rol foreign key (id_rol) references roles (id),
