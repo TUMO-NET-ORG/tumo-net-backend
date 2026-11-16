@@ -357,3 +357,34 @@ describe('rutas inexistentes', () => {
     expect(res.body.error).toBe('RUTA_NO_ENCONTRADA');
   });
 });
+
+describe('usuarios no activos (CU01 flujo 3.b, RF2)', () => {
+  test.each(['inactivo', 'suspendido', 'dado_de_baja'])(
+    'un usuario %s no puede iniciar sesión aunque la contraseña sea correcta',
+    async (estado) => {
+      authRepository.buscarPorEmail.mockResolvedValue(usuarioBD({ estado }));
+
+      const res = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ email: 'ana@tumo.world', password: PASSWORD });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('USUARIO_NO_ACTIVO');
+      expect(res.body).not.toHaveProperty('token');
+    },
+  );
+
+  test.each(['inactivo', 'suspendido', 'dado_de_baja'])(
+    'un usuario %s pierde la sesión que tenía abierta',
+    async (estado) => {
+      authRepository.buscarActivoPorId.mockResolvedValue(usuarioBD({ estado }));
+
+      const res = await request(app)
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${tokenPara()}`);
+
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('USUARIO_NO_AUTORIZADO');
+    },
+  );
+});

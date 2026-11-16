@@ -2,6 +2,8 @@
 // paso 2) sin una base real: se reemplaza el pool de mysql2.
 jest.mock('../../src/config/db', () => ({ query: jest.fn(), execute: jest.fn() }));
 
+const fs = require('fs');
+const path = require('path');
 const pool = require('../../src/config/db');
 const usuarioRepository = require('../../src/server/v1/repositories/usuario.repository');
 
@@ -101,5 +103,44 @@ describe('usuarioRepository.listar', () => {
     const resultado = await listar();
 
     expect(resultado).toEqual({ usuarios: [{ id: 1 }, { id: 2 }], total: 42 });
+  });
+});
+
+describe('usuarioRepository.actualizarEstado (baja lógica)', () => {
+  test('actualiza id_estado con un UPDATE parametrizado y devuelve el usuario', async () => {
+    pool.execute
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([[{ id: 15, estado: 'dado_de_baja' }]]);
+
+    const usuario = await usuarioRepository.actualizarEstado(15, 5);
+
+    const [sql, params] = pool.execute.mock.calls[0];
+    expect(sql).toMatch(/^UPDATE usuarios SET id_estado = \? WHERE id = \?$/);
+    expect(params).toEqual([5, 15]);
+    expect(usuario).toEqual({ id: 15, estado: 'dado_de_baja' });
+  });
+
+  test('el repositorio de usuarios nunca borra registros físicamente', () => {
+    const fuente = fs.readFileSync(
+      path.join(__dirname, '../../src/server/v1/repositories/usuario.repository.js'),
+      'utf8',
+    );
+
+    expect(fuente).not.toMatch(/\bDELETE\b/i);
+  });
+});
+
+describe('usuarioRepository.buscarIdEstadoPorCodigo', () => {
+  test('devuelve el id del estado', async () => {
+    pool.execute.mockResolvedValueOnce([[{ id: 5 }]]);
+
+    await expect(usuarioRepository.buscarIdEstadoPorCodigo('dado_de_baja')).resolves.toBe(5);
+    expect(pool.execute.mock.calls[0][1]).toEqual(['dado_de_baja']);
+  });
+
+  test('devuelve null si el estado no existe', async () => {
+    pool.execute.mockResolvedValueOnce([[]]);
+
+    await expect(usuarioRepository.buscarIdEstadoPorCodigo('dado_de_baja')).resolves.toBeNull();
   });
 });

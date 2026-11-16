@@ -32,7 +32,8 @@ insert into estado_usuario (codigo, nombre) values
   ('activo', 'Activo'),
   ('inactivo', 'Inactivo'),
   ('suspendido', 'Suspendido'),
-  ('pendiente_verificacion', 'Pendiente verificacion mail');
+  ('pendiente_verificacion', 'Pendiente verificacion mail'),
+  ('dado_de_baja', 'Dado de baja');
 
 create table usuarios (
   id int unsigned auto_increment primary key,

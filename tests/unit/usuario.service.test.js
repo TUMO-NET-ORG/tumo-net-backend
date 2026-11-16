@@ -6,6 +6,7 @@ const argon2 = require('argon2');
 const usuarioRepository = require('../../src/server/v1/repositories/usuario.repository');
 const mailService = require('../../src/server/v1/services/mail.service');
 const {
+  cambiarEstadoPorAdmin,
   crearUsuarioPorAdmin,
   editarUsuarioPorAdmin,
   listarUsuarios,
@@ -245,5 +246,55 @@ describe('listarUsuarios (CU01 – listado, flujo principal paso 2)', () => {
     const resultado = await listarUsuarios({ pagina: 1, tamanioPagina: 20 });
 
     expect(resultado.paginacion).toMatchObject({ total: 0, totalPaginas: 0 });
+  });
+});
+
+describe('cambiarEstadoPorAdmin (CU01 – flujo 3.b, RF2)', () => {
+  const admin = { id: 1, rol: 'administrador' };
+
+  beforeEach(() => {
+    usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado());
+    usuarioRepository.buscarIdEstadoPorCodigo.mockResolvedValue(3);
+  });
+
+  test.each(['activo', 'inactivo', 'suspendido', 'dado_de_baja'])(
+    'cambia el estado a %s con un UPDATE y devuelve el usuario',
+    async (estado) => {
+      usuarioRepository.actualizarEstado.mockResolvedValue(usuarioCreado({ estado }));
+
+      const usuario = await cambiarEstadoPorAdmin(15, estado, admin);
+
+      expect(usuarioRepository.buscarIdEstadoPorCodigo).toHaveBeenCalledWith(estado);
+      expect(usuarioRepository.actualizarEstado).toHaveBeenCalledWith(15, 3);
+      expect(usuario.estado).toBe(estado);
+    },
+  );
+
+  test('el administrador no puede cambiar su propio estado', async () => {
+    await expect(cambiarEstadoPorAdmin(1, 'inactivo', admin)).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'AUTO_CAMBIO_ESTADO',
+    });
+    expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  test('si el usuario no existe responde 404', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(undefined);
+
+    await expect(cambiarEstadoPorAdmin(99, 'suspendido', admin)).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'USUARIO_NO_ENCONTRADO',
+    });
+    expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  test('si el estado no está cargado en la base responde 500 de configuración', async () => {
+    usuarioRepository.buscarIdEstadoPorCodigo.mockResolvedValue(null);
+
+    await expect(cambiarEstadoPorAdmin(15, 'dado_de_baja', admin)).rejects.toMatchObject({
+      statusCode: 500,
+      code: 'CONFIGURACION_USUARIO_INCOMPLETA',
+    });
+    expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
   });
 });
