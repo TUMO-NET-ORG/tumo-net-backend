@@ -160,6 +160,27 @@ async function editarUsuarioPorAdmin(id, cambios, admin) {
   }
 }
 
+// CU01 (flujo principal, paso 2): listado paginado para el administrador.
+async function listarUsuarios({ busqueda, rol, estado, pagina, tamanioPagina }) {
+  const { usuarios, total } = await usuarioRepository.listar({
+    busqueda,
+    rol,
+    estado,
+    limite: tamanioPagina,
+    offset: (pagina - 1) * tamanioPagina,
+  });
+
+  return {
+    usuarios,
+    paginacion: {
+      pagina,
+      tamanioPagina,
+      total,
+      totalPaginas: Math.ceil(total / tamanioPagina),
+    },
+  };
+}
+
 // Genera un código nuevo para un usuario que quedó pendiente de verificación
 // (por ejemplo, si el mail del registro no llegó o el código venció).
 // Responde igual exista o no la cuenta, para no revelar emails registrados.
@@ -196,5 +217,6 @@ module.exports = {
   crearUsuarioPorAdmin,
   darDeAltaUsuario,
   editarUsuarioPorAdmin,
+  listarUsuarios,
   reenviarCodigoVerificacion,
 };

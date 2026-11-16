@@ -8,6 +8,7 @@ const mailService = require('../../src/server/v1/services/mail.service');
 const {
   crearUsuarioPorAdmin,
   editarUsuarioPorAdmin,
+  listarUsuarios,
 } = require('../../src/server/v1/services/usuario.service');
 
 function datosAlta(cambios = {}) {
@@ -198,5 +199,51 @@ describe('editarUsuarioPorAdmin (CU01 – edición por el administrador, RF1)', 
     await editarUsuarioPorAdmin(1, { nombre: 'Admin', rol: 'administrador' }, admin);
 
     expect(usuarioRepository.actualizar).toHaveBeenCalled();
+  });
+});
+
+describe('listarUsuarios (CU01 – listado, flujo principal paso 2)', () => {
+  test('calcula offset y totalPaginas y pasa los filtros al repositorio', async () => {
+    usuarioRepository.listar.mockResolvedValue({ usuarios: [usuarioCreado()], total: 45 });
+
+    const resultado = await listarUsuarios({
+      busqueda: 'lucia',
+      rol: 'tutor',
+      estado: 'activo',
+      pagina: 3,
+      tamanioPagina: 20,
+    });
+
+    expect(usuarioRepository.listar).toHaveBeenCalledWith({
+      busqueda: 'lucia',
+      rol: 'tutor',
+      estado: 'activo',
+      limite: 20,
+      offset: 40,
+    });
+    expect(resultado).toEqual({
+      usuarios: [usuarioCreado()],
+      paginacion: { pagina: 3, tamanioPagina: 20, total: 45, totalPaginas: 3 },
+    });
+  });
+
+  test('una página fuera de rango devuelve lista vacía con el total real', async () => {
+    usuarioRepository.listar.mockResolvedValue({ usuarios: [], total: 5 });
+
+    const resultado = await listarUsuarios({ pagina: 4, tamanioPagina: 5 });
+
+    expect(usuarioRepository.listar).toHaveBeenCalledWith(
+      expect.objectContaining({ limite: 5, offset: 15 }),
+    );
+    expect(resultado.usuarios).toEqual([]);
+    expect(resultado.paginacion).toEqual({ pagina: 4, tamanioPagina: 5, total: 5, totalPaginas: 1 });
+  });
+
+  test('sin resultados informa 0 páginas', async () => {
+    usuarioRepository.listar.mockResolvedValue({ usuarios: [], total: 0 });
+
+    const resultado = await listarUsuarios({ pagina: 1, tamanioPagina: 20 });
+
+    expect(resultado.paginacion).toMatchObject({ total: 0, totalPaginas: 0 });
   });
 });

@@ -3,11 +3,13 @@ const {
   altaUsuarioAdminSchema,
   editarUsuarioSchema,
   idUsuarioSchema,
+  listarUsuariosSchema,
 } = require('../validators/usuario.validator');
 const {
   darDeAltaUsuario,
   crearUsuarioPorAdmin,
   editarUsuarioPorAdmin,
+  listarUsuarios,
 } = require('../services/usuario.service');
 
 function responderDatosInvalidos(res, error) {
@@ -74,4 +76,23 @@ async function editarUsuarioAdmin(req, res) {
   return res.status(200).json({ usuario });
 }
 
-module.exports = { crearUsuario, crearUsuarioAdmin, editarUsuarioAdmin };
+// CU01 (flujo principal, paso 2): listado con búsqueda, filtros y paginación.
+async function listarUsuariosAdmin(req, res) {
+  const validacion = listarUsuariosSchema.validate(req.query, {
+    abortEarly: false,
+  });
+
+  if (validacion.error) {
+    return responderDatosInvalidos(res, validacion.error);
+  }
+
+  const resultado = await listarUsuarios(validacion.value);
+  return res.status(200).json(resultado);
+}
+
+module.exports = {
+  crearUsuario,
+  crearUsuarioAdmin,
+  editarUsuarioAdmin,
+  listarUsuariosAdmin,
+};

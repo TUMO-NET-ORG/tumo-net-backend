@@ -1,9 +1,7 @@
 const pool = require('../../../config/db');
 
 // Datos del usuario que se pueden devolver al cliente (sin hash ni contadores).
-async function buscarPublicoPorId(conexion, id) {
-  const [filas] = await conexion.execute(
-    `SELECT
+const COLUMNAS_PUBLICAS = `
        u.id, u.nombre, u.apellido, u.documento, u.email,
        u.fecha_nacimiento AS fechaNacimiento,
        u.foto_url AS fotoUrl,
@@ -12,10 +10,16 @@ async function buscarPublicoPorId(conexion, id) {
        e.codigo AS estado,
        u.fecha_alta AS fechaAlta,
        u.fecha_aceptacion_terminos AS fechaAceptacionTerminos,
-       u.version_terminos AS versionTerminos
+       u.version_terminos AS versionTerminos`;
+
+const FROM_USUARIOS = `
      FROM usuarios u
      INNER JOIN roles r ON r.id = u.id_rol
-     INNER JOIN estado_usuario e ON e.id = u.id_estado
+     INNER JOIN estado_usuario e ON e.id = u.id_estado`;
+
+async function buscarPublicoPorId(conexion, id) {
+  const [filas] = await conexion.execute(
+    `SELECT ${COLUMNAS_PUBLICAS} ${FROM_USUARIOS}
      WHERE u.id = ?`,
     [id],
   );
@@ -142,8 +146,61 @@ async function actualizar(id, cambios) {
   return buscarPublicoPorId(pool, id);
 }
 
+// Escapa los comodines de LIKE para que la búsqueda sea literal.
+function escaparLike(texto) {
+  return texto.replace(/[\\%_]/g, (caracter) => `\\${caracter}`);
+}
+
+// CU01 (flujo principal, paso 2): listado paginado con búsqueda y filtros.
+// Sin filtro de estado se excluyen los usuarios dados de baja (baja lógica).
+async function listar({ busqueda, rol, estado, limite, offset }) {
+  const condiciones = [];
+  const parametros = [];
+
+  if (estado) {
+    condiciones.push('e.codigo = ?');
+    parametros.push(estado);
+  } else {
+    condiciones.push("e.codigo <> 'dado_de_baja'");
+  }
+
+  if (rol) {
+    condiciones.push('r.codigo = ?');
+    parametros.push(rol);
+  }
+
+  if (busqueda) {
+    const patron = `%${escaparLike(busqueda)}%`;
+    condiciones.push(
+      `(u.nombre LIKE ? OR u.apellido LIKE ?
+        OR CONCAT(u.nombre, ' ', u.apellido) LIKE ? OR u.email LIKE ?)`,
+    );
+    parametros.push(patron, patron, patron, patron);
+  }
+
+  const where = `WHERE ${condiciones.join(' AND ')}`;
+
+  const [conteo] = await pool.query(
+    `SELECT COUNT(*) AS total ${FROM_USUARIOS} ${where}`,
+    parametros,
+  );
+
+  // pool.query (y no execute) por el problema de mysql2 con LIMIT ? en
+  // sentencias preparadas. limite y offset llegan validados como enteros.
+  const [usuarios] = await pool.query(
+    `SELECT ${COLUMNAS_PUBLICAS} ${FROM_USUARIOS}
+     ${where}
+     ORDER BY u.apellido, u.nombre, u.id
+     LIMIT ? OFFSET ?`,
+    [...parametros, limite, offset],
+  );
+
+  return { usuarios, total: Number(conteo[0].total) };
+}
+
 module.exports = {
   actualizar,
+  listar,
   buscarIdsPorCodigo,
   buscarPorId,
   crear,

@@ -209,3 +209,78 @@ describe('PATCH /api/v1/usuarios/:id (CU01 – edición por administrador)', () 
     expect(res.body.error).toBe('EMAIL_DUPLICADO');
   });
 });
+
+describe('GET /api/v1/usuarios (CU01 – listado con búsqueda y filtros)', () => {
+  beforeEach(() => {
+    usuarioRepository.listar.mockResolvedValue({
+      usuarios: [{ id: 15, nombre: 'Lucía', email: 'lucia@tumo.world', rol: 'staff', estado: 'activo' }],
+      total: 1,
+    });
+  });
+
+  test('sin token responde 401', async () => {
+    const res = await request(app).get(URL);
+
+    expect(res.status).toBe(401);
+    expect(usuarioRepository.listar).not.toHaveBeenCalled();
+  });
+
+  test.each(['alumno', 'staff', 'tutor'])('con rol %s responde 403 (RNF12)', async (rol) => {
+    const res = await request(app).get(URL).set('Authorization', `Bearer ${sesion(rol)}`);
+
+    expect(res.status).toBe(403);
+    expect(usuarioRepository.listar).not.toHaveBeenCalled();
+  });
+
+  test('como administrador devuelve la primera página con valores por defecto', async () => {
+    const res = await request(app)
+      .get(URL)
+      .set('Authorization', `Bearer ${sesion('administrador')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.paginacion).toEqual({ pagina: 1, tamanioPagina: 20, total: 1, totalPaginas: 1 });
+    expect(res.body.usuarios[0]).not.toHaveProperty('passwordHash');
+    expect(usuarioRepository.listar).toHaveBeenCalledWith({
+      busqueda: undefined,
+      rol: undefined,
+      estado: undefined,
+      limite: 20,
+      offset: 0,
+    });
+  });
+
+  test('pasa búsqueda, filtros y paginación al repositorio', async () => {
+    const res = await request(app)
+      .get(URL)
+      .query({ busqueda: ' lucia ', rol: 'staff', estado: 'dado_de_baja', pagina: '2', tamanioPagina: '10' })
+      .set('Authorization', `Bearer ${sesion('administrador')}`);
+
+    expect(res.status).toBe(200);
+    expect(usuarioRepository.listar).toHaveBeenCalledWith({
+      busqueda: 'lucia',
+      rol: 'staff',
+      estado: 'dado_de_baja',
+      limite: 10,
+      offset: 10,
+    });
+  });
+
+  test.each([
+    ['rol inexistente', { rol: 'superusuario' }, 'rol'],
+    ['estado inexistente', { estado: 'borrado' }, 'estado'],
+    ['página 0', { pagina: '0' }, 'pagina'],
+    ['página no numérica', { pagina: 'dos' }, 'pagina'],
+    ['tamaño de página mayor a 100', { tamanioPagina: '500' }, 'tamanioPagina'],
+    ['parámetro desconocido', { orden: 'email' }, 'orden'],
+  ])('con %s responde 400', async (_caso, query, campo) => {
+    const res = await request(app)
+      .get(URL)
+      .query(query)
+      .set('Authorization', `Bearer ${sesion('administrador')}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('DATOS_INVALIDOS');
+    expect(res.body.detalles.map((d) => d.campo)).toContain(campo);
+    expect(usuarioRepository.listar).not.toHaveBeenCalled();
+  });
+});
