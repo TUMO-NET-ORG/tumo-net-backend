@@ -71,6 +71,10 @@
 			"value": ""
 		},
 		{
+			"key": "password_temporal",
+			"value": ""
+		},
+		{
 			"key": "recovery_token",
 			"value": ""
 		}
@@ -2818,6 +2822,281 @@
 								}
 							}
 						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "restablecer contraseña por administrador (200)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/{{alta_admin_id}}/restablecer-password",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"{{alta_admin_id}}",
+								"restablecer-password"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "CU01 flujo 3.a (RF4): el sistema genera una contraseña temporal y la devuelve una sola vez para que el administrador se la comunique al usuario. Se guarda en password_temporal. Ejecutar después de los requests de \"primer ingreso\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const respuesta = pm.response.json();",
+									"pm.test('devuelve una temporal que cumple la política (RNF07)', function () {",
+									"  pm.expect(respuesta.passwordTemporal).to.be.a('string');",
+									"  pm.expect(respuesta.passwordTemporal.length).to.be.at.least(10);",
+									"  pm.expect(respuesta.passwordTemporal).to.match(/\\d/);",
+									"});",
+									"pm.test('no se guarda en caché', function () {",
+									"  pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-store');",
+									"});",
+									"pm.test('no devuelve el hash', function () {",
+									"  pm.expect(respuesta.usuario).to.not.have.property('passwordHash');",
+									"});",
+									"pm.collectionVariables.set('password_temporal', respuesta.passwordTemporal);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "restablecer contraseña - la anterior ya no sirve (401)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/login",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "La contraseña que tenía el usuario (la que eligió en \"cambiar contraseña inicial\") deja de ser válida.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{alta_admin_email}}\",\n  \"password\": \"{{alta_admin_password_nueva}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "restablecer contraseña - login con la temporal (200)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/login",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "El usuario entra con la temporal y queda obligado a cambiarla.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{alta_admin_email}}\",\n  \"password\": \"{{password_temporal}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"pm.test('debe cambiar la contraseña', function () {",
+									"  pm.expect(pm.response.json().usuario.debeCambiarPassword).to.eql(true);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "restablecer contraseña - la propia (400)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/{{admin_id}}/restablecer-password",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"{{admin_id}}",
+								"restablecer-password"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "El administrador no puede restablecer su propia contraseña; usa change-password."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('informa el motivo', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('AUTO_RESTABLECER_PASSWORD');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "restablecer contraseña - usuario inexistente (404)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/999999999/restablecer-password",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"999999999",
+								"restablecer-password"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "El usuario no existe."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 404', function () { pm.response.to.have.status(404); });",
+									"pm.test('informa usuario no encontrado', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('USUARIO_NO_ENCONTRADO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "restablecer contraseña - sin token (401)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/{{alta_admin_id}}/restablecer-password",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"{{alta_admin_id}}",
+								"restablecer-password"
+							]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "RNF12: la ruta requiere sesión iniciada."
 					},
 					"response": [],
 					"event": [

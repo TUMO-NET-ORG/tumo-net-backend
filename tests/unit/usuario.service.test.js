@@ -9,7 +9,9 @@ const {
   cambiarEstadoPorAdmin,
   crearUsuarioPorAdmin,
   editarUsuarioPorAdmin,
+  generarPasswordTemporal,
   listarUsuarios,
+  restablecerPasswordPorAdmin,
 } = require('../../src/server/v1/services/usuario.service');
 
 function datosAlta(cambios = {}) {
@@ -296,5 +298,73 @@ describe('cambiarEstadoPorAdmin (CU01 – flujo 3.b, RF2)', () => {
       code: 'CONFIGURACION_USUARIO_INCOMPLETA',
     });
     expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
+  });
+});
+
+describe('generarPasswordTemporal (CU01 – flujo 3.a)', () => {
+  const { passwordSchema } = require('../../src/server/v1/validators/password.validator');
+
+  test('genera 16 caracteres sin caracteres ambiguos y cumple la política (RNF07)', () => {
+    for (let i = 0; i < 200; i += 1) {
+      const password = generarPasswordTemporal();
+
+      expect(password).toHaveLength(16);
+      expect(password).toMatch(/^[A-HJ-NP-Za-km-z2-9]+$/);
+      expect(password).toMatch(/[A-Z]/);
+      expect(password).toMatch(/[a-z]/);
+      expect(password).toMatch(/\d/);
+      expect(passwordSchema.validate(password).error).toBeUndefined();
+    }
+  });
+
+  test('es aleatoria: no se repite', () => {
+    const generadas = new Set(Array.from({ length: 500 }, () => generarPasswordTemporal()));
+
+    expect(generadas.size).toBe(500);
+  });
+});
+
+describe('restablecerPasswordPorAdmin (CU01 – flujo 3.a, RF4)', () => {
+  const admin = { id: 1, rol: 'administrador' };
+
+  beforeEach(() => {
+    usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado());
+    usuarioRepository.restablecerPasswordTemporal.mockResolvedValue(usuarioCreado());
+  });
+
+  test('devuelve la temporal y guarda solo su hash argon2 (RNF07)', async () => {
+    const { usuario, passwordTemporal } = await restablecerPasswordPorAdmin(15, admin);
+
+    const [id, hash] = usuarioRepository.restablecerPasswordTemporal.mock.calls[0];
+    expect(id).toBe(15);
+    expect(hash).toMatch(/^\$argon2/);
+    expect(hash).not.toContain(passwordTemporal);
+    await expect(argon2.verify(hash, passwordTemporal)).resolves.toBe(true);
+    expect(usuario).toEqual(usuarioCreado());
+  });
+
+  test('cada restablecimiento genera una temporal distinta', async () => {
+    const primera = await restablecerPasswordPorAdmin(15, admin);
+    const segunda = await restablecerPasswordPorAdmin(15, admin);
+
+    expect(primera.passwordTemporal).not.toBe(segunda.passwordTemporal);
+  });
+
+  test('el administrador no puede restablecer su propia contraseña', async () => {
+    await expect(restablecerPasswordPorAdmin(1, admin)).rejects.toMatchObject({
+      statusCode: 400,
+      code: 'AUTO_RESTABLECER_PASSWORD',
+    });
+    expect(usuarioRepository.restablecerPasswordTemporal).not.toHaveBeenCalled();
+  });
+
+  test('si el usuario no existe responde 404', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(undefined);
+
+    await expect(restablecerPasswordPorAdmin(99, admin)).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'USUARIO_NO_ENCONTRADO',
+    });
+    expect(usuarioRepository.restablecerPasswordTemporal).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,10 @@
 // Verifica el SQL que arma el listado de usuarios (CU01, flujo principal
 // paso 2) sin una base real: se reemplaza el pool de mysql2.
-jest.mock('../../src/config/db', () => ({ query: jest.fn(), execute: jest.fn() }));
+jest.mock('../../src/config/db', () => ({
+  query: jest.fn(),
+  execute: jest.fn(),
+  getConnection: jest.fn(),
+}));
 
 const fs = require('fs');
 const path = require('path');
@@ -142,5 +146,66 @@ describe('usuarioRepository.buscarIdEstadoPorCodigo', () => {
     pool.execute.mockResolvedValueOnce([[]]);
 
     await expect(usuarioRepository.buscarIdEstadoPorCodigo('dado_de_baja')).resolves.toBeNull();
+  });
+});
+
+describe('usuarioRepository.restablecerPasswordTemporal (CU01 – flujo 3.a)', () => {
+  function conexionFalsa() {
+    const conexion = {
+      beginTransaction: jest.fn().mockResolvedValue(),
+      commit: jest.fn().mockResolvedValue(),
+      rollback: jest.fn().mockResolvedValue(),
+      release: jest.fn(),
+      execute: jest.fn(),
+    };
+    pool.getConnection.mockResolvedValue(conexion);
+    return conexion;
+  }
+
+  test('reemplaza el hash, cierra sesiones, fuerza el cambio y desbloquea la cuenta', async () => {
+    const conexion = conexionFalsa();
+    conexion.execute
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([{ affectedRows: 0 }])
+      .mockResolvedValueOnce([[{ id: 15, estado: 'activo' }]]);
+
+    const usuario = await usuarioRepository.restablecerPasswordTemporal(15, '$argon2id$hash');
+
+    const [sql, params] = conexion.execute.mock.calls[0];
+    expect(sql).toContain('password_hash = ?');
+    expect(sql).toContain('password_version = password_version + 1');
+    expect(sql).toContain('debe_cambiar_password = 1');
+    expect(sql).toContain('intentos_fallidos = 0');
+    expect(sql).toContain('bloqueado_hasta = NULL');
+    expect(params).toEqual(['$argon2id$hash', 15]);
+    expect(conexion.commit).toHaveBeenCalled();
+    expect(conexion.release).toHaveBeenCalled();
+    expect(usuario).toEqual({ id: 15, estado: 'activo' });
+  });
+
+  test('invalida los enlaces de recuperación pendientes', async () => {
+    const conexion = conexionFalsa();
+    conexion.execute
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([{ affectedRows: 2 }])
+      .mockResolvedValueOnce([[{ id: 15 }]]);
+
+    await usuarioRepository.restablecerPasswordTemporal(15, 'hash');
+
+    const [sql, params] = conexion.execute.mock.calls[1];
+    expect(sql).toMatch(/UPDATE token_recuperacion\s+SET usado = 1/);
+    expect(params).toEqual([15]);
+  });
+
+  test('si algo falla hace rollback y libera la conexión', async () => {
+    const conexion = conexionFalsa();
+    conexion.execute.mockRejectedValueOnce(new Error('falla de base'));
+
+    await expect(usuarioRepository.restablecerPasswordTemporal(15, 'hash')).rejects.toThrow(
+      'falla de base',
+    );
+    expect(conexion.rollback).toHaveBeenCalled();
+    expect(conexion.commit).not.toHaveBeenCalled();
+    expect(conexion.release).toHaveBeenCalled();
   });
 });

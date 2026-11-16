@@ -7,6 +7,39 @@ const { enviarCodigoVerificacion } = require('./mail.service');
 
 const DURACION_CODIGO_MINUTOS = 15;
 
+// Contraseña temporal (CU01, flujo 3.a). Sin caracteres que se confunden al
+// dictarla (0/O, 1/l/I). Siempre incluye mayúscula, minúscula y número, así
+// cumple la política de RNF07.
+const LARGO_PASSWORD_TEMPORAL = 16;
+const MAYUSCULAS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const MINUSCULAS = 'abcdefghijkmnopqrstuvwxyz';
+const DIGITOS = '23456789';
+const CARACTERES_TEMPORAL = MAYUSCULAS + MINUSCULAS + DIGITOS;
+
+function caracterAleatorio(caracteres) {
+  return caracteres[crypto.randomInt(caracteres.length)];
+}
+
+function generarPasswordTemporal() {
+  const caracteres = [
+    caracterAleatorio(MAYUSCULAS),
+    caracterAleatorio(MINUSCULAS),
+    caracterAleatorio(DIGITOS),
+  ];
+
+  while (caracteres.length < LARGO_PASSWORD_TEMPORAL) {
+    caracteres.push(caracterAleatorio(CARACTERES_TEMPORAL));
+  }
+
+  // Mezcla (Fisher-Yates) para que los obligatorios no queden al principio.
+  for (let i = caracteres.length - 1; i > 0; i -= 1) {
+    const j = crypto.randomInt(i + 1);
+    [caracteres[i], caracteres[j]] = [caracteres[j], caracteres[i]];
+  }
+
+  return caracteres.join('');
+}
+
 function generarCodigoVerificacion() {
   return String(crypto.randomInt(100000, 1000000));
 }
@@ -192,6 +225,34 @@ async function cambiarEstadoPorAdmin(id, estado, admin) {
   return usuarioRepository.actualizarEstado(id, idEstado);
 }
 
+// CU01 (flujo 3.a, RF4): el administrador restablece la contraseña de un
+// usuario. La temporal se devuelve una sola vez para que el administrador se
+// la comunique; solo se guarda su hash (RNF07).
+async function restablecerPasswordPorAdmin(id, admin) {
+  if (id === admin.id) {
+    throw new AppError(
+      400,
+      'Para cambiar tu propia contraseña usá la opción de cambio de contraseña',
+      'AUTO_RESTABLECER_PASSWORD',
+    );
+  }
+
+  const usuario = await usuarioRepository.buscarPorId(id);
+
+  if (!usuario) {
+    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
+  }
+
+  const passwordTemporal = generarPasswordTemporal();
+  const passwordHash = await argon2.hash(passwordTemporal);
+  const usuarioActualizado = await usuarioRepository.restablecerPasswordTemporal(
+    id,
+    passwordHash,
+  );
+
+  return { usuario: usuarioActualizado, passwordTemporal };
+}
+
 // CU01 (flujo principal, paso 2): listado paginado para el administrador.
 async function listarUsuarios({ busqueda, rol, estado, pagina, tamanioPagina }) {
   const { usuarios, total } = await usuarioRepository.listar({
@@ -250,6 +311,8 @@ module.exports = {
   crearUsuarioPorAdmin,
   darDeAltaUsuario,
   editarUsuarioPorAdmin,
+  generarPasswordTemporal,
   listarUsuarios,
   reenviarCodigoVerificacion,
+  restablecerPasswordPorAdmin,
 };

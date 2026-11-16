@@ -217,8 +217,49 @@ async function actualizarEstado(id, idEstado) {
   return buscarPublicoPorId(pool, id);
 }
 
+// CU01 (flujo 3.a, RF4): reemplaza la contraseña por una temporal. Invalida
+// las sesiones abiertas (password_version), obliga a cambiarla en el próximo
+// ingreso, desbloquea la cuenta e invalida los enlaces de recuperación
+// pendientes para que no pisen la temporal.
+async function restablecerPasswordTemporal(id, passwordHash) {
+  const conexion = await pool.getConnection();
+
+  try {
+    await conexion.beginTransaction();
+
+    await conexion.execute(
+      `UPDATE usuarios
+       SET password_hash = ?,
+           password_version = password_version + 1,
+           debe_cambiar_password = 1,
+           intentos_fallidos = 0,
+           bloqueado_hasta = NULL
+       WHERE id = ?`,
+      [passwordHash, id],
+    );
+
+    await conexion.execute(
+      `UPDATE token_recuperacion
+       SET usado = 1, fecha_uso = CURRENT_TIMESTAMP
+       WHERE usuario_id = ? AND usado = 0`,
+      [id],
+    );
+
+    const usuario = await buscarPublicoPorId(conexion, id);
+
+    await conexion.commit();
+    return usuario;
+  } catch (error) {
+    await conexion.rollback();
+    throw error;
+  } finally {
+    conexion.release();
+  }
+}
+
 module.exports = {
   actualizar,
+  restablecerPasswordTemporal,
   actualizarEstado,
   buscarIdEstadoPorCodigo,
   listar,
