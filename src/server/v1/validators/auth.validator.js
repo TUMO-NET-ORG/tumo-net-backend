@@ -30,7 +30,13 @@ const restablecerPasswordSchema = Joi.object({
   nuevaPassword: passwordSchema.required(),
 });
 
+const cambiarPasswordSchema = Joi.object({
+  passwordActual: Joi.string().min(1).max(128).required(),
+  nuevaPassword: passwordSchema.required(),
+});
+
 module.exports = {
+  cambiarPasswordSchema,
   loginSchema,
   verificarEmailSchema,
   solicitarRecuperacionSchema,

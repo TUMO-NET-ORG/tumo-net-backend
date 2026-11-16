@@ -61,6 +61,60 @@ async function darDeAltaUsuario(datos) {
   }
 }
 
+function errorDuplicado(error) {
+  // El índice único que falló viene en el mensaje de MySQL.
+  if (String(error.sqlMessage || error.message).includes('uk_usuario_email')) {
+    return new AppError(
+      409,
+      'Ya existe un usuario con ese email',
+      'EMAIL_DUPLICADO',
+    );
+  }
+
+  return new AppError(
+    409,
+    'Ya existe un usuario con ese documento',
+    'DOCUMENTO_DUPLICADO',
+  );
+}
+
+// CU01 (RF1): el administrador crea un usuario individualmente con el rol
+// indicado. La cuenta queda activa (no requiere verificar el email, porque la
+// crea el administrador) y la contraseña inicial se guarda hasheada (RNF07).
+async function crearUsuarioPorAdmin(datos) {
+  const ids = await usuarioRepository.buscarIdsPorCodigo(datos.rol, 'activo');
+
+  if (!ids || ids.id_estado === null) {
+    throw new AppError(
+      500,
+      'La configuración inicial de roles y estados está incompleta',
+      'CONFIGURACION_USUARIO_INCOMPLETA',
+    );
+  }
+
+  if (ids.id_rol === null) {
+    throw new AppError(400, 'El rol indicado no existe', 'ROL_INVALIDO');
+  }
+
+  const { password, ...datosUsuario } = datos;
+  const passwordHash = await argon2.hash(password);
+
+  try {
+    return await usuarioRepository.crear({
+      ...datosUsuario,
+      passwordHash,
+      idRol: ids.id_rol,
+      idEstado: ids.id_estado,
+    });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      throw errorDuplicado(error);
+    }
+
+    throw error;
+  }
+}
+
 // Genera un código nuevo para un usuario que quedó pendiente de verificación
 // (por ejemplo, si el mail del registro no llegó o el código venció).
 // Responde igual exista o no la cuenta, para no revelar emails registrados.
@@ -93,4 +147,8 @@ async function reenviarCodigoVerificacion(email) {
   }
 }
 
-module.exports = { darDeAltaUsuario, reenviarCodigoVerificacion };
+module.exports = {
+  crearUsuarioPorAdmin,
+  darDeAltaUsuario,
+  reenviarCodigoVerificacion,
+};

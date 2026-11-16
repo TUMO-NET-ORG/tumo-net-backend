@@ -23,6 +23,46 @@
 			"value": ""
 		},
 		{
+			"key": "admin_email",
+			"value": "admin.prueba@tumo.world"
+		},
+		{
+			"key": "admin_password",
+			"value": "AdminSegura2026!"
+		},
+		{
+			"key": "admin_jwt_token",
+			"value": ""
+		},
+		{
+			"key": "alta_admin_email",
+			"value": ""
+		},
+		{
+			"key": "alta_admin_documento",
+			"value": ""
+		},
+		{
+			"key": "alta_admin_documento_2",
+			"value": ""
+		},
+		{
+			"key": "alta_admin_password",
+			"value": "InicialSegura2026"
+		},
+		{
+			"key": "alta_admin_password_nueva",
+			"value": "NuevaSegura2026"
+		},
+		{
+			"key": "nuevo_usuario_jwt_token",
+			"value": ""
+		},
+		{
+			"key": "token_previo_cambio",
+			"value": ""
+		},
+		{
 			"key": "recovery_token",
 			"value": ""
 		}
@@ -78,6 +118,56 @@
 									"});",
 									"// Se guarda el token para las rutas protegidas (/me, /logout)",
 									"pm.collectionVariables.set('jwt_token', respuesta.token);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "login administrador",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/login",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Inicia sesión con una cuenta de rol administrador y guarda el token en admin_jwt_token (lo usan los requests de CU01). La cuenta debe existir en la base con id_rol del rol 'administrador' y estado 'activo'."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const respuesta = pm.response.json();",
+									"pm.test('el usuario es administrador', function () {",
+									"  pm.expect(respuesta.usuario.rol).to.eql('administrador');",
+									"});",
+									"// Se guarda el token para las rutas de administración (CU01)",
+									"pm.collectionVariables.set('admin_jwt_token', respuesta.token);"
 								]
 							}
 						}
@@ -789,6 +879,792 @@
 								"exec": [
 									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
 									"pm.test('error DATOS_INVALIDOS', function () { pm.expect(pm.response.json().error).to.eql('DATOS_INVALIDOS'); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "alta por administrador (201)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Lucía\",\n  \"apellido\": \"Gómez\",\n  \"documento\": \"{{alta_admin_documento}}\",\n  \"email\": \"{{alta_admin_email}}\",\n  \"password\": \"{{alta_admin_password}}\",\n  \"rol\": \"staff\",\n  \"fechaNacimiento\": \"1995-03-20\",\n  \"fotoUrl\": null,\n  \"urlPortfolio\": null\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "CU01 (RF1): el administrador crea un usuario individualmente con su rol y una contraseña inicial. Queda en estado 'activo'. El pre-request genera un email y un documento únicos para poder ejecutarlo varias veces."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const sufijo = Date.now();",
+									"pm.collectionVariables.set('alta_admin_email', `staff.prueba.${sufijo}@tumo.world`);",
+									"pm.collectionVariables.set('alta_admin_documento', String(sufijo).slice(-9));"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 201', function () { pm.response.to.have.status(201); });",
+									"const usuario = pm.response.json().usuario;",
+									"pm.test('queda activo y con el rol indicado', function () {",
+									"  pm.expect(usuario.estado).to.eql('activo');",
+									"  pm.expect(usuario.rol).to.eql('staff');",
+									"});",
+									"pm.test('no devuelve la contraseña ni su hash', function () {",
+									"  pm.expect(usuario).to.not.have.property('password');",
+									"  pm.expect(usuario).to.not.have.property('passwordHash');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "alta por administrador - email duplicado (409)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Lucía\",\n  \"apellido\": \"Gómez\",\n  \"documento\": \"{{alta_admin_documento_2}}\",\n  \"email\": \"{{alta_admin_email}}\",\n  \"password\": \"{{alta_admin_password}}\",\n  \"rol\": \"staff\",\n  \"fechaNacimiento\": \"1995-03-20\",\n  \"fotoUrl\": null,\n  \"urlPortfolio\": null\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Ejecutar después de \"alta por administrador (201)\": reutiliza el mismo email con otro documento, por lo que debe rechazarse."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('alta_admin_documento_2', String(Date.now()).slice(-9));"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 409', function () { pm.response.to.have.status(409); });",
+									"pm.test('informa email duplicado', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('EMAIL_DUPLICADO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "alta por administrador - datos invalidos (400)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"no-es-un-email\",\n  \"password\": \"corta\",\n  \"rol\": \"superusuario\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "CU01 flujo 4.a: faltan datos obligatorios y otros son inválidos."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"const respuesta = pm.response.json();",
+									"pm.test('detalla los campos con error', function () {",
+									"  pm.expect(respuesta.error).to.eql('DATOS_INVALIDOS');",
+									"  const campos = respuesta.detalles.map((d) => d.campo);",
+									"  pm.expect(campos).to.include.members(['nombre', 'apellido', 'documento', 'email', 'password', 'rol']);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "alta por administrador - sin token (401)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Lucía\",\n  \"apellido\": \"Gómez\",\n  \"documento\": \"{{alta_admin_documento}}\",\n  \"email\": \"{{alta_admin_email}}\",\n  \"password\": \"InicialSegura2026\",\n  \"rol\": \"staff\",\n  \"fechaNacimiento\": \"1995-03-20\",\n  \"fotoUrl\": null,\n  \"urlPortfolio\": null\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "RNF12: la ruta requiere sesión iniciada."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "alta por administrador - rol sin permiso (403)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Lucía\",\n  \"apellido\": \"Gómez\",\n  \"documento\": \"{{alta_admin_documento}}\",\n  \"email\": \"{{alta_admin_email}}\",\n  \"password\": \"InicialSegura2026\",\n  \"rol\": \"staff\",\n  \"fechaNacimiento\": \"1995-03-20\",\n  \"fotoUrl\": null,\n  \"urlPortfolio\": null\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "RNF12: usa el token del login de auth (usuario no administrador), por lo que debe rechazarse. Ejecutar antes \"auth / login\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 403', function () { pm.response.to.have.status(403); });",
+									"pm.test('informa falta de permisos', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('SIN_PERMISO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "primer ingreso - login usuario creado por admin",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/login",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "CU01: el usuario creado por el administrador inicia sesión con la contraseña inicial. La respuesta indica que debe cambiarla. Ejecutar después de \"alta por administrador (201)\".",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{alta_admin_email}}\",\n  \"password\": \"{{alta_admin_password}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const respuesta = pm.response.json();",
+									"pm.test('indica que debe cambiar la contraseña', function () {",
+									"  pm.expect(respuesta.usuario.debeCambiarPassword).to.eql(true);",
+									"});",
+									"pm.collectionVariables.set('nuevo_usuario_jwt_token', respuesta.token);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "primer ingreso - ruta protegida bloqueada (403)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{nuevo_usuario_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Mientras no cambie la contraseña inicial, las rutas protegidas responden CAMBIO_PASSWORD_REQUERIDO (solo quedan disponibles /auth/me, /auth/logout y /auth/change-password).",
+						"body": {
+							"mode": "raw",
+							"raw": "{}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 403', function () { pm.response.to.have.status(403); });",
+									"pm.test('exige cambiar la contraseña', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('CAMBIO_PASSWORD_REQUERIDO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "primer ingreso - sesion actual (me) permitida",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/me",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"me"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{nuevo_usuario_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "El frontend puede consultar la sesión para saber que debe mostrar el cambio de contraseña."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"pm.test('informa el cambio pendiente', function () {",
+									"  pm.expect(pm.response.json().usuario.debeCambiarPassword).to.eql(true);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "cambiar contraseña - actual incorrecta (401)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/change-password",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"change-password"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{nuevo_usuario_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "La contraseña actual no coincide.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"passwordActual\": \"NoEsLaClave123\",\n  \"nuevaPassword\": \"{{alta_admin_password_nueva}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });",
+									"pm.test('informa contraseña actual incorrecta', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('PASSWORD_ACTUAL_INCORRECTA');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "cambiar contraseña - nueva no cumple la politica (400)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/change-password",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"change-password"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{nuevo_usuario_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "RNF07: mínimo 10 caracteres y al menos un número.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"passwordActual\": \"{{alta_admin_password}}\",\n  \"nuevaPassword\": \"corta\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('detalla el campo nuevaPassword', function () {",
+									"  const respuesta = pm.response.json();",
+									"  pm.expect(respuesta.error).to.eql('DATOS_INVALIDOS');",
+									"  pm.expect(respuesta.detalles.map((d) => d.campo)).to.include('nuevaPassword');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "cambiar contraseña - igual a la actual (400)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/change-password",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"change-password"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{nuevo_usuario_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "La nueva contraseña debe ser distinta de la inicial.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"passwordActual\": \"{{alta_admin_password}}\",\n  \"nuevaPassword\": \"{{alta_admin_password}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('informa contraseña repetida', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('PASSWORD_REPETIDA');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "cambiar contraseña inicial (200)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/change-password",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"change-password"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{nuevo_usuario_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "CU01: cambia la contraseña inicial. Devuelve un token nuevo porque el anterior queda invalidado. Ejecutar después de los casos de error de cambio de contraseña.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"passwordActual\": \"{{alta_admin_password}}\",\n  \"nuevaPassword\": \"{{alta_admin_password_nueva}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const respuesta = pm.response.json();",
+									"pm.test('devuelve un token nuevo', function () {",
+									"  pm.expect(respuesta.token).to.be.a('string');",
+									"  pm.expect(respuesta.token).to.not.eql(pm.collectionVariables.get('nuevo_usuario_jwt_token'));",
+									"});",
+									"pm.collectionVariables.set('token_previo_cambio', pm.collectionVariables.get('nuevo_usuario_jwt_token'));",
+									"pm.collectionVariables.set('nuevo_usuario_jwt_token', respuesta.token);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "cambiar contraseña - token anterior invalidado (401)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/me",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"me"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token_previo_cambio}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "El token emitido antes del cambio deja de servir. Ejecutar después de \"cambiar contraseña inicial (200)\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "primer ingreso - login con contraseña nueva",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/login",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Después del cambio ya no se exige cambiar la contraseña.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{alta_admin_email}}\",\n  \"password\": \"{{alta_admin_password_nueva}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"pm.test('ya no debe cambiar la contraseña', function () {",
+									"  pm.expect(pm.response.json().usuario.debeCambiarPassword).to.eql(false);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "primer ingreso - contraseña inicial ya no sirve (401)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/login",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "La contraseña que conoce el administrador deja de ser válida.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{alta_admin_email}}\",\n  \"password\": \"{{alta_admin_password}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });"
 								]
 							}
 						}

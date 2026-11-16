@@ -4,6 +4,7 @@ const {
   solicitarRecuperacionSchema,
   restablecerPasswordSchema,
   reenviarVerificacionSchema,
+  cambiarPasswordSchema,
 } = require('../validators/auth.validator');
 const {
   iniciarSesion,
@@ -11,6 +12,7 @@ const {
   solicitarRecuperacion: solicitarRecuperacionService,
   restablecerPassword: restablecerPasswordService,
   perfilPublico,
+  cambiarPassword: cambiarPasswordService,
 } = require('../services/auth.service');
 const { reenviarCodigoVerificacion } = require('../services/usuario.service');
 
@@ -113,6 +115,27 @@ async function reenviarVerificacion(req, res) {
   });
 }
 
+async function cambiarPassword(req, res) {
+  const validacion = cambiarPasswordSchema.validate(req.body, {
+    abortEarly: false,
+  });
+
+  if (validacion.error) {
+    return responderDatosInvalidos(res, validacion.error);
+  }
+
+  const resultado = await cambiarPasswordService(
+    req.usuario,
+    validacion.value.passwordActual,
+    validacion.value.nuevaPassword,
+  );
+
+  return res.status(200).json({
+    mensaje: 'Contraseña actualizada correctamente',
+    token: resultado.token,
+  });
+}
+
 function obtenerSesion(req, res) {
   return res.status(200).json({ usuario: perfilPublico(req.usuario) });
 }
@@ -125,6 +148,7 @@ function logout(req, res) {
 }
 
 module.exports = {
+  cambiarPassword,
   login,
   logout,
   obtenerSesion,

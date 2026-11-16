@@ -118,6 +118,7 @@ async function iniciarSesion(email, password) {
       email: usuario.email,
       rol: usuario.rol,
       estado: usuario.estado,
+      debeCambiarPassword: Boolean(usuario.debeCambiarPassword),
     },
   };
 }
@@ -151,6 +152,7 @@ function perfilPublico(usuario) {
     email: usuario.email,
     rol: usuario.rol,
     estado: usuario.estado,
+    debeCambiarPassword: Boolean(usuario.debeCambiarPassword),
   };
 }
 
@@ -260,7 +262,52 @@ async function restablecerPassword(token, nuevaPassword) {
   }
 }
 
+// CU01: cambio de contraseña con sesión iniciada (obligatorio en el primer
+// ingreso de una cuenta creada por el administrador). Devuelve un token nuevo
+// porque el cambio invalida los anteriores.
+async function cambiarPassword(sesion, passwordActual, nuevaPassword) {
+  const usuario = await authRepository.buscarPorEmail(sesion.email);
+
+  if (!usuario || !(await argon2.verify(usuario.passwordHash, passwordActual))) {
+    throw new AppError(
+      401,
+      'La contraseña actual es incorrecta',
+      'PASSWORD_ACTUAL_INCORRECTA',
+    );
+  }
+
+  if (passwordActual === nuevaPassword) {
+    throw new AppError(
+      400,
+      'La nueva contraseña debe ser distinta de la actual',
+      'PASSWORD_REPETIDA',
+    );
+  }
+
+  const passwordHash = await argon2.hash(nuevaPassword);
+  const actualizado = await authRepository.actualizarPassword(
+    usuario.id,
+    passwordHash,
+  );
+
+  if (!actualizado) {
+    throw new AppError(
+      401,
+      'El usuario no está disponible',
+      'USUARIO_NO_AUTORIZADO',
+    );
+  }
+
+  return {
+    token: crearToken({
+      ...usuario,
+      passwordVersion: usuario.passwordVersion + 1,
+    }),
+  };
+}
+
 module.exports = {
+  cambiarPassword,
   iniciarSesion,
   perfilPublico,
   validarUsuarioToken,
