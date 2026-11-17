@@ -18,7 +18,7 @@ function datosAlta(cambios = {}) {
   return {
     nombre: 'Lucía',
     apellido: 'Gómez',
-    documento: '45678901',
+    documento: '45678905',
     email: 'lucia@tumo.world',
     password: 'Inicial12345',
     rol: 'tutor',
@@ -31,7 +31,7 @@ function usuarioCreado(cambios = {}) {
     id: 15,
     nombre: 'Lucía',
     apellido: 'Gómez',
-    documento: '45678901',
+    documento: '45678905',
     email: 'lucia@tumo.world',
     rol: 'tutor',
     estado: 'activo',
@@ -176,7 +176,7 @@ describe('editarUsuarioPorAdmin (CU01 – edición por el administrador, RF1)', 
     usuarioRepository.actualizar.mockRejectedValue(errorDuplicado('uk_usuario_documento'));
 
     await expect(
-      editarUsuarioPorAdmin(15, { documento: '12345678' }, admin),
+      editarUsuarioPorAdmin(15, { documento: '12345672' }, admin),
     ).rejects.toMatchObject({ statusCode: 409, code: 'DOCUMENTO_DUPLICADO' });
   });
 

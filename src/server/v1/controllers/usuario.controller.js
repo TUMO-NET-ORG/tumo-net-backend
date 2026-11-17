@@ -1,3 +1,4 @@
+const { responderDatosInvalidos } = require('../utils/respuesta');
 const {
   altaUsuarioSchema,
   altaUsuarioAdminSchema,
@@ -15,15 +16,7 @@ const {
   restablecerPasswordPorAdmin,
 } = require('../services/usuario.service');
 
-function responderDatosInvalidos(res, error) {
-  return res.status(400).json({
-    error: 'DATOS_INVALIDOS',
-    detalles: error.details.map((detalle) => ({
-      campo: detalle.path.join('.'),
-      mensaje: detalle.message,
-    })),
-  });
-}
+
 
 async function crearUsuario(req, res) {
   const validacion = altaUsuarioSchema.validate(req.body, {
