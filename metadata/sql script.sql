@@ -107,6 +107,7 @@ create table grupos (
   descripcion varchar(500) null,
   creado_por int unsigned not null,
   fecha_creacion datetime not null default current_timestamp,
+  activo tinyint not null default 1,
   unique key uk_grupo_nombre (nombre),
   constraint fk_grupo_creado_por foreign key (creado_por) references usuarios (id)
 ) engine=innodb default charset=utf8mb4 collate=utf8mb4_unicode_ci;
