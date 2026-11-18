@@ -1,4 +1,5 @@
 const { responderDatosInvalidos } = require('../utils/respuesta');
+
 const {
   altaUsuarioSchema,
   altaUsuarioAdminSchema,
