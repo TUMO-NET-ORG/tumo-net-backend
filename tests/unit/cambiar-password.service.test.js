@@ -19,7 +19,7 @@ function usuarioBD(cambios = {}) {
     id: 15,
     nombre: 'Lucía',
     apellido: 'Gómez',
-    documento: '45678901',
+    documento: '45678905',
     email: 'lucia@tumo.world',
     passwordHash,
     passwordVersion: 3,

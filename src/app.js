@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const cors = require('cors');
 const usuarioRoutes = require('./server/v1/routes/usuario.routes');
 const authRoutes = require('./server/v1/routes/auth.routes');
+const grupoRoutes = require('./server/v1/routes/grupo.routes');
 const AppError = require('./server/v1/errors/AppError');
 
 const app = express();
@@ -28,6 +29,9 @@ app.use(express.json());
 app.get('/api/health', (req, res) => res.json({ estado: 'ok' }));
 app.use('/api/v1/usuarios', usuarioRoutes);
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/grupos', grupoRoutes);
+
+
 
 
 app.use((req, res) => {
