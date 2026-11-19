@@ -128,17 +128,33 @@ async function enviarEnlaceAccion(email, token, tipo) {
     const esInvitacion = tipo === 'invitacion';
     const asunto = esInvitacion
       ? 'Activá tu cuenta de TUMO'
-      : 'Confirmá tu nuevo email de TUMO';
-    const texto = esInvitacion
-      ? `Un administrador creó una cuenta para vos. Abrí este enlace para verificar tu email, aceptar los términos y definir tu contraseña:\n\n${enlace}`
-      : `Solicitaste cambiar tu email de TUMO. Abrí este enlace para confirmar la nueva dirección:\n\n${enlace}`;
+      : 'Confirmá el cambio de mail de TUMO';
+    const mensajeHtml = esInvitacion
+      ? 'Un administrador creó una cuenta para vos. Usá el botón para verificar tu email, aceptar los términos y definir tu contraseña.'
+      : 'Solicitaste cambiar tu email de TUMO. Usá el botón para confirmar la nueva dirección.';
+    const botonHtml = esInvitacion
+      ? `
+          <a
+            href="${enlace}"
+            style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px"
+          >
+            Activar cuenta
+          </a>
+        `
+      : `
+          <a
+            href="${enlace}"
+            style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px"
+          >
+            Confirmar cambio de mail
+          </a>
+        `;
 
     await obtenerTransporter().sendMail({
       from: process.env.SMTP_FROM,
       to: email,
       subject: asunto,
-      text: texto,
-      html: `<p>${texto.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>`,
+      html: `<p>${mensajeHtml}</p><p>${botonHtml}</p>`,
     });
   } catch (error) {
     if (error instanceof AppError) {
