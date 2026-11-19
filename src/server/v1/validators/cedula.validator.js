@@ -1,5 +1,5 @@
-
 const Joi = require('joi');
+
 const MULTIPLICADORES = [2, 9, 8, 7, 6, 3, 4];
 
 const MENSAJE_CEDULA = 'La cédula no es válida. Revisá que esté bien escrita, sin puntos ni guiones.';

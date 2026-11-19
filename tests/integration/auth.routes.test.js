@@ -25,7 +25,7 @@ function usuarioBD(cambios = {}) {
     id: 7,
     nombre: 'Ana',
     apellido: 'Pérez',
-    documento: '45678905',
+    documento: '12345672',
     email: 'ana@tumo.world',
     passwordHash,
     passwordVersion: 0,
@@ -248,7 +248,7 @@ describe('registro: POST /api/v1/usuarios/alta (CU05 2.a / 2.b)', () => {
   const datos = {
     nombre: 'Ana',
     apellido: 'Pérez',
-    documento: '45678905',
+    documento: '12345672',
     email: 'ana@tumo.world',
     password: 'Contrasena123',
     aceptaTerminos: true,

@@ -178,7 +178,7 @@ describe('editarUsuarioPorAdmin (CU01 – edición por el administrador, RF1)', 
     usuarioRepository.actualizar.mockRejectedValue(errorDuplicado('uk_usuario_documento'));
 
     await expect(
-      editarUsuarioPorAdmin(15, { documento: '12345678' }, admin),
+      editarUsuarioPorAdmin(15, { documento: '12345672' }, admin),
     ).rejects.toMatchObject({ statusCode: 409, code: 'DOCUMENTO_DUPLICADO' });
   });
 

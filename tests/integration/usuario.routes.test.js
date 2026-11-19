@@ -125,7 +125,7 @@ describe('PATCH /api/v1/usuarios/:id (CU01 – edición por administrador)', () 
       id: 15,
       nombre: 'Lucía',
       apellido: 'Gómez',
-      documento: '45678901',
+      documento: '45678905',
       email: 'lucia.gomez@tumo.world',
       rol: 'tutor',
       estado: 'activo',

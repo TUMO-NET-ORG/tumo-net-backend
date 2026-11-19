@@ -53,7 +53,11 @@ describe('política de contraseña (RNF07: mínimo 10 caracteres)', () => {
     const { error } = altaUsuarioSchema.validate({
       nombre: 'Ana',
       apellido: 'Pérez',
+<<<<<<< HEAD
       documento: '45678905',
+=======
+      documento: '12345672',
+>>>>>>> develop
       email: 'ana@tumo.world',
       password: 'corta1',
       aceptaTerminos: true,

@@ -77,6 +77,42 @@
 		{
 			"key": "recovery_token",
 			"value": ""
+		},
+		{
+			"key": "grupo_responsable_id",
+			"value": ""
+		},
+		{
+			"key": "grupo_integrante_id",
+			"value": ""
+		},
+		{
+			"key": "grupo_baja_id",
+			"value": ""
+		},
+		{
+			"key": "grupo_nombre",
+			"value": ""
+		},
+		{
+			"key": "grupo_aux_email",
+			"value": ""
+		},
+		{
+			"key": "grupo_aux_documento",
+			"value": ""
+		},
+		{
+			"key": "grupo_nombre_aux",
+			"value": ""
+		},
+		{
+			"key": "grupo_id",
+			"value": ""
+		},
+		{
+			"key": "grupo_nombre_2",
+			"value": ""
 		}
 	],
 	"item": [
@@ -129,7 +165,11 @@
 									"  pm.expect(respuesta.usuario).to.not.have.property('passwordHash');",
 									"});",
 									"// Se guarda el token para las rutas protegidas (/me, /logout)",
-									"pm.collectionVariables.set('jwt_token', respuesta.token);"
+									"// Solo se guarda si el login salió bien: si no, quedaría 'undefined' y los",
+									"// requests que lo usan fallarían con TOKEN_INVALIDO.",
+									"if (pm.response.code === 200) {",
+									"  pm.collectionVariables.set('jwt_token', respuesta.token);",
+									"}"
 								]
 							}
 						}
@@ -179,8 +219,12 @@
 									"  pm.expect(respuesta.usuario.rol).to.eql('administrador');",
 									"});",
 									"// Se guarda el token para las rutas de administración (CU01)",
-									"pm.collectionVariables.set('admin_jwt_token', respuesta.token);",
-									"pm.collectionVariables.set('admin_id', respuesta.usuario.id);"
+									"// Solo se guarda si el login salió bien: si no, quedaría 'undefined' y los",
+									"// requests que lo usan fallarían con TOKEN_INVALIDO.",
+									"if (pm.response.code === 200) {",
+									"  pm.collectionVariables.set('admin_jwt_token', respuesta.token);",
+									"  pm.collectionVariables.set('admin_id', respuesta.usuario.id);",
+									"}"
 								]
 							}
 						}
@@ -779,7 +823,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"nombre\": \"Pepe\",\n  \"apellido\": \"Argento\",\n  \"documento\": \"452876321\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"fechaNacimiento\": \"2008-05-14\",\n  \"fotoUrl\": null,\n  \"urlPortfolio\": \"https://portfolio.ejemplou.com/pepe\",\n  \"aceptaTerminos\": true,\n  \"versionTerminos\": \"1.0\"\n}",
+							"raw": "{\n  \"nombre\": \"Pepe\",\n  \"apellido\": \"Argento\",\n  \"documento\": \"45287633\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"fechaNacimiento\": \"2008-05-14\",\n  \"fotoUrl\": null,\n  \"urlPortfolio\": \"https://portfolio.ejemplou.com/pepe\",\n  \"aceptaTerminos\": true,\n  \"versionTerminos\": \"1.0\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -826,7 +870,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"nombre\": \"Pepe\",\n  \"apellido\": \"Argento\",\n  \"documento\": \"999999999\",\n  \"email\": \"pepe@hotmail.com\",\n  \"password\": \"{{password}}\",\n  \"fechaNacimiento\": \"2008-05-14\",\n  \"fotoUrl\": null,\n  \"urlPortfolio\": \"https://portfolio.ejemplou.com/pepe\",\n  \"aceptaTerminos\": true,\n  \"versionTerminos\": \"1.0\"\n}",
+							"raw": "{\n  \"nombre\": \"Pepe\",\n  \"apellido\": \"Argento\",\n  \"documento\": \"11111111\",\n  \"email\": \"pepe@hotmail.com\",\n  \"password\": \"{{password}}\",\n  \"fechaNacimiento\": \"2008-05-14\",\n  \"fotoUrl\": null,\n  \"urlPortfolio\": \"https://portfolio.ejemplou.com/pepe\",\n  \"aceptaTerminos\": true,\n  \"versionTerminos\": \"1.0\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -871,7 +915,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"nombre\": \"Pepe\",\n  \"apellido\": \"Argento\",\n  \"documento\": \"999999998\",\n  \"email\": \"{{email}}\",\n  \"password\": \"Corta12\",\n  \"fechaNacimiento\": \"2008-05-14\",\n  \"fotoUrl\": null,\n  \"urlPortfolio\": \"https://portfolio.ejemplou.com/pepe\",\n  \"aceptaTerminos\": true,\n  \"versionTerminos\": \"1.0\"\n}",
+							"raw": "{\n  \"nombre\": \"Pepe\",\n  \"apellido\": \"Argento\",\n  \"documento\": \"22222222\",\n  \"email\": \"{{email}}\",\n  \"password\": \"Corta12\",\n  \"fechaNacimiento\": \"2008-05-14\",\n  \"fotoUrl\": null,\n  \"urlPortfolio\": \"https://portfolio.ejemplou.com/pepe\",\n  \"aceptaTerminos\": true,\n  \"versionTerminos\": \"1.0\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -941,9 +985,16 @@
 							"script": {
 								"type": "text/javascript",
 								"exec": [
+									"// Cédula uruguaya válida (7 dígitos + dígito verificador)",
+									"function cedulaAleatoria() {",
+									"  const base = String(Math.floor(Math.random() * 9000000) + 1000000);",
+									"  const pesos = [2, 9, 8, 7, 6, 3, 4];",
+									"  const suma = pesos.reduce((total, peso, i) => total + Number(base[i]) * peso, 0);",
+									"  return base + ((10 - (suma % 10)) % 10);",
+									"}",
 									"const sufijo = Date.now();",
 									"pm.collectionVariables.set('alta_admin_email', `staff.prueba.${sufijo}@tumo.world`);",
-									"pm.collectionVariables.set('alta_admin_documento', String(sufijo).slice(-9));"
+									"pm.collectionVariables.set('alta_admin_documento', cedulaAleatoria());"
 								]
 							}
 						},
@@ -1013,7 +1064,14 @@
 							"script": {
 								"type": "text/javascript",
 								"exec": [
-									"pm.collectionVariables.set('alta_admin_documento_2', String(Date.now()).slice(-9));"
+									"// Cédula uruguaya válida (7 dígitos + dígito verificador)",
+									"function cedulaAleatoria() {",
+									"  const base = String(Math.floor(Math.random() * 9000000) + 1000000);",
+									"  const pesos = [2, 9, 8, 7, 6, 3, 4];",
+									"  const suma = pesos.reduce((total, peso, i) => total + Number(base[i]) * peso, 0);",
+									"  return base + ((10 - (suma % 10)) % 10);",
+									"}",
+									"pm.collectionVariables.set('alta_admin_documento_2', cedulaAleatoria());"
 								]
 							}
 						},
@@ -3106,6 +3164,2018 @@
 								"type": "text/javascript",
 								"exec": [
 									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });"
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "grupos",
+			"item": [
+				{
+					"name": "preparar - responsable tutor (201)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Prueba\",\n  \"apellido\": \"Grupos\",\n  \"documento\": \"{{grupo_aux_documento}}\",\n  \"email\": \"{{grupo_aux_email}}\",\n  \"password\": \"{{alta_admin_password}}\",\n  \"rol\": \"tutor\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Crea un tutor para usar como responsable de los grupos. Ejecutar antes \"auth / login administrador\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Cédula uruguaya válida (7 dígitos + dígito verificador)",
+									"function cedulaAleatoria() {",
+									"  const base = String(Math.floor(Math.random() * 9000000) + 1000000);",
+									"  const pesos = [2, 9, 8, 7, 6, 3, 4];",
+									"  const suma = pesos.reduce((total, peso, i) => total + Number(base[i]) * peso, 0);",
+									"  return base + ((10 - (suma % 10)) % 10);",
+									"}",
+									"pm.collectionVariables.set('grupo_aux_email', `tutor.grupo.${Date.now()}@tumo.world`);",
+									"pm.collectionVariables.set('grupo_aux_documento', cedulaAleatoria());"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 201', function () { pm.response.to.have.status(201); });",
+									"pm.collectionVariables.set('grupo_responsable_id', pm.response.json().usuario.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "preparar - integrante alumno (201)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Prueba\",\n  \"apellido\": \"Grupos\",\n  \"documento\": \"{{grupo_aux_documento}}\",\n  \"email\": \"{{grupo_aux_email}}\",\n  \"password\": \"{{alta_admin_password}}\",\n  \"rol\": \"alumno\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Crea un alumno para usar como integrante de los grupos."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Cédula uruguaya válida (7 dígitos + dígito verificador)",
+									"function cedulaAleatoria() {",
+									"  const base = String(Math.floor(Math.random() * 9000000) + 1000000);",
+									"  const pesos = [2, 9, 8, 7, 6, 3, 4];",
+									"  const suma = pesos.reduce((total, peso, i) => total + Number(base[i]) * peso, 0);",
+									"  return base + ((10 - (suma % 10)) % 10);",
+									"}",
+									"pm.collectionVariables.set('grupo_aux_email', `alumno.grupo.${Date.now()}@tumo.world`);",
+									"pm.collectionVariables.set('grupo_aux_documento', cedulaAleatoria());"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 201', function () { pm.response.to.have.status(201); });",
+									"pm.collectionVariables.set('grupo_integrante_id', pm.response.json().usuario.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "preparar - usuario a dar de baja (201)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Prueba\",\n  \"apellido\": \"Grupos\",\n  \"documento\": \"{{grupo_aux_documento}}\",\n  \"email\": \"{{grupo_aux_email}}\",\n  \"password\": \"{{alta_admin_password}}\",\n  \"rol\": \"alumno\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Crea un alumno que el request siguiente da de baja."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Cédula uruguaya válida (7 dígitos + dígito verificador)",
+									"function cedulaAleatoria() {",
+									"  const base = String(Math.floor(Math.random() * 9000000) + 1000000);",
+									"  const pesos = [2, 9, 8, 7, 6, 3, 4];",
+									"  const suma = pesos.reduce((total, peso, i) => total + Number(base[i]) * peso, 0);",
+									"  return base + ((10 - (suma % 10)) % 10);",
+									"}",
+									"pm.collectionVariables.set('grupo_aux_email', `alumno.grupo.${Date.now()}@tumo.world`);",
+									"pm.collectionVariables.set('grupo_aux_documento', cedulaAleatoria());"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 201', function () { pm.response.to.have.status(201); });",
+									"pm.collectionVariables.set('grupo_baja_id', pm.response.json().usuario.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "preparar - dar de baja al usuario (200)",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/{{grupo_baja_id}}/estado",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"{{grupo_baja_id}}",
+								"estado"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"estado\": \"dado_de_baja\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Da de baja al usuario creado en el request anterior, para probar que no puede integrar un grupo."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "crear grupo (201)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre}}\",\n  \"descripcion\": \"Turno mañana\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [{{grupo_integrante_id}}]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Crea un grupo con un responsable y un integrante. El administrador que lo crea no es responsable. El pre-request genera un nombre único para poder ejecutarlo varias veces. Ejecutar en orden, después de \"auth / login administrador\" y de los requests \"preparar\" de esta carpeta."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('grupo_nombre', `Grupo prueba ${Date.now()}`);"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 201', function () { pm.response.to.have.status(201); });",
+									"const grupo = pm.response.json().grupo;",
+									"pm.test('devuelve el grupo creado', function () {",
+									"  pm.expect(grupo.id).to.be.a('number');",
+									"  pm.expect(grupo.nombre).to.eql(pm.collectionVariables.get('grupo_nombre'));",
+									"  pm.expect(grupo.descripcion).to.eql('Turno mañana');",
+									"});",
+									"pm.test('guarda responsables e integrantes', function () {",
+									"  pm.expect(grupo.responsables).to.eql([Number(pm.collectionVariables.get('grupo_responsable_id'))]);",
+									"  pm.expect(grupo.integrantes).to.eql([Number(pm.collectionVariables.get('grupo_integrante_id'))]);",
+									"});",
+									"pm.test('el creador no queda como responsable', function () {",
+									"  pm.expect(grupo.responsables).to.not.include(Number(pm.collectionVariables.get('admin_id')));",
+									"});",
+									"// Se guarda el id para ver, editar y borrar el grupo",
+									"pm.collectionVariables.set('grupo_id', grupo.id);"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "crear grupo - sin descripcion ni integrantes (201)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre_2}}\",\n  \"responsables\": [{{grupo_responsable_id}}]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "La descripción y los integrantes son opcionales. Ejecutar en orden, después de \"auth / login administrador\" y de los requests \"preparar\" de esta carpeta. Su nombre se reutiliza en \"editar grupo - nombre de otro grupo (409)\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('grupo_nombre_2', `Grupo prueba B ${Date.now()}`);"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 201', function () { pm.response.to.have.status(201); });",
+									"const grupo = pm.response.json().grupo;",
+									"pm.test('queda sin descripción ni integrantes', function () {",
+									"  pm.expect(grupo.descripcion).to.eql(null);",
+									"  pm.expect(grupo.integrantes).to.eql([]);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "crear grupo - nombre duplicado (409)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre}}\",\n  \"responsables\": [{{grupo_responsable_id}}]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Reutiliza el nombre de \"crear grupo (201)\". Ejecutar en orden, después de \"auth / login administrador\" y de los requests \"preparar\" de esta carpeta."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 409', function () { pm.response.to.have.status(409); });",
+									"pm.test('informa que el grupo ya existe', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('GRUPO_YA_EXISTE');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "crear grupo - usuario dado de baja (400)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre_aux}}\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [{{grupo_integrante_id}}, {{grupo_baja_id}}]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Un usuario dado de baja no puede estar en un grupo. Ejecutar en orden, después de \"auth / login administrador\" y de los requests \"preparar\" de esta carpeta."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('grupo_nombre_aux', `Grupo prueba ${Date.now()}`);"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('informa los usuarios dados de baja', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('USUARIOS_DADOS_DE_BAJA');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "crear grupo - usuario inexistente (400)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre_aux}}\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [999999999]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Todos los responsables e integrantes tienen que existir. Ejecutar en orden, después de \"auth / login administrador\" y de los requests \"preparar\" de esta carpeta."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('grupo_nombre_aux', `Grupo prueba ${Date.now()}`);"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('informa los usuarios inexistentes', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('USUARIOS_INEXISTENTES');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "crear grupo - alumno como responsable (400)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre_aux}}\",\n  \"responsables\": [{{grupo_integrante_id}}]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Los responsables tienen que ser staff, tutor o administrador. Ejecutar en orden, después de \"auth / login administrador\" y de los requests \"preparar\" de esta carpeta."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('grupo_nombre_aux', `Grupo prueba ${Date.now()}`);"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('informa el rol inválido', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('RESPONSABLE_ROL_INVALIDO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "crear grupo - misma persona en ambas listas (400)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre_aux}}\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [{{grupo_responsable_id}}]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Una persona no puede ser responsable e integrante a la vez. Ejecutar en orden, después de \"auth / login administrador\" y de los requests \"preparar\" de esta carpeta."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('grupo_nombre_aux', `Grupo prueba ${Date.now()}`);"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('informa el usuario repetido', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('INTEGRANTE_DUPLICADO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "crear grupo - datos invalidos (400)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"ab\",\n  \"responsables\": []\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Nombre demasiado corto y sin responsables."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"const respuesta = pm.response.json();",
+									"pm.test('error DATOS_INVALIDOS con el detalle por campo', function () {",
+									"  pm.expect(respuesta.error).to.eql('DATOS_INVALIDOS');",
+									"  const campos = respuesta.detalles.map((d) => d.campo);",
+									"  pm.expect(campos).to.include.members(['nombre', 'responsables']);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "crear grupo - sin token (401)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Grupo prueba invalido\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [{{grupo_integrante_id}}]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Sin token Bearer la ruta se rechaza."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "crear grupo - rol sin permiso (403)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Grupo prueba invalido\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [{{grupo_integrante_id}}]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Usa el token del login de auth (alumno), que no puede crear grupos. Ejecutar antes \"auth / login\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 403', function () { pm.response.to.have.status(403); });",
+									"pm.test('informa falta de permisos', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('SIN_PERMISO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "listar grupos (200)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Un administrador ve todos los grupos activos, con paginación (por defecto página 1 y 20 por página)."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const respuesta = pm.response.json();",
+									"pm.test('devuelve grupos y paginación', function () {",
+									"  pm.expect(respuesta.grupos).to.be.an('array');",
+									"  pm.expect(respuesta.paginacion).to.include({ pagina: 1, limite: 20 });",
+									"  pm.expect(respuesta.paginacion.total).to.be.a('number');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "listar - buscar por nombre (200)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos?buscar={{grupo_nombre}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							],
+							"query": [
+								{
+									"key": "buscar",
+									"value": "{{grupo_nombre}}"
+								}
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Busca por nombre el grupo de \"crear grupo (201)\". Ejecutar después de \"crear grupo (201)\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const grupos = pm.response.json().grupos;",
+									"pm.test('encuentra el grupo creado', function () {",
+									"  const ids = grupos.map((g) => g.id);",
+									"  pm.expect(ids).to.include(Number(pm.collectionVariables.get('grupo_id')));",
+									"});",
+									"pm.test('informa la cantidad de integrantes', function () {",
+									"  const grupo = grupos.find((g) => g.id === Number(pm.collectionVariables.get('grupo_id')));",
+									"  pm.expect(grupo.cantidad_integrantes).to.eql(2);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "listar - paginacion (200)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos?pagina=1&limite=1",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							],
+							"query": [
+								{
+									"key": "pagina",
+									"value": "1"
+								},
+								{
+									"key": "limite",
+									"value": "1"
+								}
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Con limite=1 devuelve como máximo un grupo por página."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const respuesta = pm.response.json();",
+									"pm.test('respeta el límite y calcula las páginas', function () {",
+									"  pm.expect(respuesta.grupos.length).to.be.at.most(1);",
+									"  pm.expect(respuesta.paginacion.totalPaginas).to.eql(respuesta.paginacion.total);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "listar - parametros invalidos (400)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos?pagina=0&limite=500",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							],
+							"query": [
+								{
+									"key": "pagina",
+									"value": "0"
+								},
+								{
+									"key": "limite",
+									"value": "500"
+								}
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "La página empieza en 1 y el límite máximo es 100."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('error DATOS_INVALIDOS', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('DATOS_INVALIDOS');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "listar - sin token (401)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Sin token Bearer la ruta se rechaza."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "ver grupo (200)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Detalle del grupo con responsables e integrantes. Un administrador ve cualquier grupo. Ejecutar después de \"crear grupo (201)\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const grupo = pm.response.json().grupo;",
+									"pm.test('devuelve el grupo con sus personas separadas', function () {",
+									"  pm.expect(grupo.id).to.eql(Number(pm.collectionVariables.get('grupo_id')));",
+									"  pm.expect(grupo.responsables.map((p) => p.id)).to.eql([Number(pm.collectionVariables.get('grupo_responsable_id'))]);",
+									"  pm.expect(grupo.integrantes.map((p) => p.id)).to.eql([Number(pm.collectionVariables.get('grupo_integrante_id'))]);",
+									"});",
+									"pm.test('no expone la marca es_responsable', function () {",
+									"  pm.expect(grupo.responsables[0]).to.not.have.property('es_responsable');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "ver grupo - no es integrante (403)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Usa el token del login de auth (alumno que no está en el grupo). Ejecutar antes \"auth / login\". Ejecutar después de \"crear grupo (201)\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 403', function () { pm.response.to.have.status(403); });",
+									"pm.test('informa que no forma parte del grupo', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('SIN_PERMISO_GRUPO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "ver grupo - inexistente (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/999999999",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"999999999"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Un grupo que no existe."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 404', function () { pm.response.to.have.status(404); });",
+									"pm.test('informa que el grupo no existe', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('GRUPO_NO_ENCONTRADO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "ver grupo - id invalido (400)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/abc",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"abc"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "El id tiene que ser un número."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('error DATOS_INVALIDOS', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('DATOS_INVALIDOS');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "ver grupo - sin token (401)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Sin token Bearer la ruta se rechaza."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "editar grupo (200)",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre}}\",\n  \"descripcion\": \"Turno tarde\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": []\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Reemplaza el grupo completo: nuevo nombre y descripción, y saca al integrante. El pre-request genera el nombre nuevo y lo guarda en grupo_nombre. Ejecutar después de \"crear grupo (201)\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('grupo_nombre', `Grupo prueba editado ${Date.now()}`);"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const grupo = pm.response.json().grupo;",
+									"pm.test('devuelve el grupo como quedó', function () {",
+									"  pm.expect(grupo.nombre).to.eql(pm.collectionVariables.get('grupo_nombre'));",
+									"  pm.expect(grupo.descripcion).to.eql('Turno tarde');",
+									"  pm.expect(grupo.integrantes).to.eql([]);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "editar grupo - se guardaron los cambios (200)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Vuelve a leer el grupo para comprobar que la edición quedó guardada. Ejecutar después de \"editar grupo (200)\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const grupo = pm.response.json().grupo;",
+									"pm.test('tiene el nombre nuevo y ya no tiene integrantes', function () {",
+									"  pm.expect(grupo.nombre).to.eql(pm.collectionVariables.get('grupo_nombre'));",
+									"  pm.expect(grupo.integrantes).to.eql([]);",
+									"  pm.expect(grupo.responsables).to.have.lengthOf(1);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "editar grupo - usuario dado de baja (400)",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre}}\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [{{grupo_baja_id}}]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Al editar se aplican las mismas reglas que al crear. Ejecutar después de \"crear grupo (201)\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('informa los usuarios dados de baja', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('USUARIOS_DADOS_DE_BAJA');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "editar grupo - nombre de otro grupo (409)",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre_2}}\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": []\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Usa el nombre del grupo de \"crear grupo - sin descripcion ni integrantes (201)\". Ejecutar después de \"crear grupo (201)\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 409', function () { pm.response.to.have.status(409); });",
+									"pm.test('informa que el nombre ya está en uso', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('GRUPO_YA_EXISTE');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "editar grupo - datos invalidos (400)",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"ab\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Se tiene que mandar el grupo completo: sin responsables no es válido."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('error DATOS_INVALIDOS', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('DATOS_INVALIDOS');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "editar grupo - inexistente (404)",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/999999999",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"999999999"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre}}\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [{{grupo_integrante_id}}]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Un grupo que no existe."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 404', function () { pm.response.to.have.status(404); });",
+									"pm.test('informa que el grupo no existe', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('GRUPO_NO_ENCONTRADO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "editar grupo - rol sin permiso (403)",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre}}\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [{{grupo_integrante_id}}]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Un alumno no puede editar grupos. Usa el token de \"auth / login\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 403', function () { pm.response.to.have.status(403); });",
+									"pm.test('informa falta de permisos', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('SIN_PERMISO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "editar grupo - sin token (401)",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre}}\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [{{grupo_integrante_id}}]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Sin token Bearer la ruta se rechaza."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "borrar grupo - rol sin permiso (403)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Un alumno no puede borrar grupos. Usa el token de \"auth / login\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 403', function () { pm.response.to.have.status(403); });",
+									"pm.test('informa falta de permisos', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('SIN_PERMISO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "borrar grupo - sin token (401)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Sin token Bearer la ruta se rechaza."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "borrar grupo (204)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Baja lógica: el grupo deja de aparecer pero queda en la base (activo = 0). Ejecutar después de \"crear grupo (201)\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 204', function () { pm.response.to.have.status(204); });",
+									"pm.test('no devuelve cuerpo', function () { pm.expect(pm.response.text()).to.eql(''); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "borrar grupo - ya borrado (404)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Borrar dos veces el mismo grupo. Ejecutar después de \"borrar grupo (204)\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 404', function () { pm.response.to.have.status(404); });",
+									"pm.test('informa que el grupo no existe', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('GRUPO_NO_ENCONTRADO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "borrar grupo - ya no se puede ver (404)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos/{{grupo_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos",
+								"{{grupo_id}}"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Un grupo dado de baja no se puede ver. Ejecutar después de \"borrar grupo (204)\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 404', function () { pm.response.to.have.status(404); });",
+									"pm.test('informa que el grupo no existe', function () {",
+									"  pm.expect(pm.response.json().error).to.eql('GRUPO_NO_ENCONTRADO');",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "borrar grupo - ya no aparece en el listado (200)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos?buscar={{grupo_nombre}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							],
+							"query": [
+								{
+									"key": "buscar",
+									"value": "{{grupo_nombre}}"
+								}
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Un grupo dado de baja no aparece en el listado. Ejecutar después de \"borrar grupo (204)\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"pm.test('el grupo borrado no está', function () {",
+									"  const ids = pm.response.json().grupos.map((g) => g.id);",
+									"  pm.expect(ids).to.not.include(Number(pm.collectionVariables.get('grupo_id')));",
+									"});"
 								]
 							}
 						}
