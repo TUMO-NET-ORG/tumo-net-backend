@@ -2,6 +2,8 @@
 
 use tumo_net;
 
+drop table if exists grupo_integrantes;
+drop table if exists grupos;
 drop table if exists token_recuperacion;
 drop table if exists verificacion_email;
 drop table if exists usuarios;
@@ -32,7 +34,8 @@ insert into estado_usuario (codigo, nombre) values
   ('activo', 'Activo'),
   ('inactivo', 'Inactivo'),
   ('suspendido', 'Suspendido'),
-  ('pendiente_verificacion', 'Pendiente verificacion mail');
+  ('pendiente_verificacion', 'Pendiente verificacion mail'),
+  ('dado_de_baja', 'Dado de baja');
 
 create table usuarios (
   id int unsigned auto_increment primary key,
@@ -52,6 +55,7 @@ create table usuarios (
   intentos_fallidos int unsigned not null default 0,
   bloqueado_hasta datetime null,
   password_version int unsigned not null default 0,
+  debe_cambiar_password tinyint not null default 0,
   unique key uk_usuario_email (email),
   unique key uk_usuario_documento (documento),
   constraint fk_usuario_rol foreign key (id_rol) references roles (id),
@@ -62,11 +66,14 @@ create table token_recuperacion (
   id int unsigned auto_increment primary key,
   usuario_id int unsigned not null,
   token_hash char(64) not null,
+  tipo varchar(30) not null default 'recuperacion',
+  email_pendiente varchar(255) null,
   fecha_expiracion datetime not null,
   fecha_creacion datetime not null default current_timestamp,
   fecha_uso datetime null,
   usado tinyint not null default 0,
   unique key uk_token_hash (token_hash),
+  index idx_token_accion_usuario_tipo (usuario_id, tipo, usado),
   index idx_token_recuperacion_usuario_fecha (usuario_id, fecha_creacion),
   constraint fk_token_usuario foreign key (usuario_id)
     references usuarios (id) on delete cascade
@@ -96,3 +103,27 @@ create table verificacion_email (
 ) engine=innodb
   default charset=utf8mb4
   collate=utf8mb4_unicode_ci;
+
+create table grupos (
+  id int unsigned auto_increment primary key,
+  nombre varchar(100) not null,
+  descripcion varchar(500) null,
+  creado_por int unsigned not null,
+  fecha_creacion datetime not null default current_timestamp,
+  activo tinyint not null default 1,
+  unique key uk_grupo_nombre (nombre),
+  constraint fk_grupo_creado_por foreign key (creado_por) references usuarios (id)
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+
+create table grupo_integrantes (
+  grupo_id int unsigned not null,
+  usuario_id int unsigned not null,
+  es_responsable tinyint not null default 0,
+  fecha_alta datetime not null default current_timestamp,
+  primary key (grupo_id, usuario_id),
+  index idx_grupo_integrantes_usuario (usuario_id),
+  constraint fk_grupo_integrantes_grupo foreign key (grupo_id)
+    references grupos (id) on delete cascade,
+  constraint fk_grupo_integrantes_usuario foreign key (usuario_id)
+    references usuarios (id)
+) engine=innodb default charset=utf8mb4 collate=utf8mb4_unicode_ci;

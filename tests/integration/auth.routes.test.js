@@ -25,7 +25,7 @@ function usuarioBD(cambios = {}) {
     id: 7,
     nombre: 'Ana',
     apellido: 'Pérez',
-    documento: '12345678',
+    documento: '12345672',
     email: 'ana@tumo.world',
     passwordHash,
     passwordVersion: 0,
@@ -143,6 +143,7 @@ describe('rutas protegidas (RF7)', () => {
       email: 'ana@tumo.world',
       rol: 'alumno',
       estado: 'activo',
+      debeCambiarPassword: false,
     });
   });
 
@@ -247,7 +248,7 @@ describe('registro: POST /api/v1/usuarios/alta (CU05 2.a / 2.b)', () => {
   const datos = {
     nombre: 'Ana',
     apellido: 'Pérez',
-    documento: '12345678',
+    documento: '12345672',
     email: 'ana@tumo.world',
     password: 'Contrasena123',
     aceptaTerminos: true,
@@ -355,4 +356,35 @@ describe('rutas inexistentes', () => {
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('RUTA_NO_ENCONTRADA');
   });
+});
+
+describe('usuarios no activos (CU01 flujo 3.b, RF2)', () => {
+  test.each(['inactivo', 'suspendido', 'dado_de_baja'])(
+    'un usuario %s no puede iniciar sesión aunque la contraseña sea correcta',
+    async (estado) => {
+      authRepository.buscarPorEmail.mockResolvedValue(usuarioBD({ estado }));
+
+      const res = await request(app)
+        .post('/api/v1/auth/login')
+        .send({ email: 'ana@tumo.world', password: PASSWORD });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('USUARIO_NO_ACTIVO');
+      expect(res.body).not.toHaveProperty('token');
+    },
+  );
+
+  test.each(['inactivo', 'suspendido', 'dado_de_baja'])(
+    'un usuario %s pierde la sesión que tenía abierta',
+    async (estado) => {
+      authRepository.buscarActivoPorId.mockResolvedValue(usuarioBD({ estado }));
+
+      const res = await request(app)
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${tokenPara()}`);
+
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('USUARIO_NO_AUTORIZADO');
+    },
+  );
 });
