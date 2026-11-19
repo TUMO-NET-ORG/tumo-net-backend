@@ -2,7 +2,9 @@ const express = require('express');
 const {
   crearUsuario,
   crearUsuarioAdmin,
+  obtenerUsuarioAdmin,
   editarUsuarioAdmin,
+  solicitarCambioEmailAdmin,
   listarUsuariosAdmin,
   cambiarEstadoAdmin,
   restablecerPasswordAdmin,
@@ -21,12 +23,22 @@ router.get('/', autenticar, requerirRol('administrador'), listarUsuariosAdmin);
 // CU01 (RF1): alta individual por el administrador (RNF12).
 router.post('/', autenticar, requerirRol('administrador'), crearUsuarioAdmin);
 
+// Consulta individual para la pantalla de edición del administrador.
+router.get('/:id', autenticar, requerirRol('administrador'), obtenerUsuarioAdmin);
+
 // CU01 (RF1): edición de datos por el administrador (RNF12).
 router.patch(
   '/:id',
   autenticar,
   requerirRol('administrador'),
   editarUsuarioAdmin,
+);
+
+router.post(
+  '/:id/cambio-email',
+  autenticar,
+  requerirRol('administrador'),
+  solicitarCambioEmailAdmin,
 );
 
 // CU01 (flujo 3.b, RF2): cambio de estado y baja lógica (RNF12).

@@ -68,8 +68,13 @@ describe('cuenta con cambio de contraseña pendiente', () => {
   });
 
   test('una cuenta sin cambio pendiente usa las rutas con normalidad', async () => {
-    usuarioRepository.buscarIdsPorCodigo.mockResolvedValue({ id_rol: 3, id_estado: 1 });
-    usuarioRepository.crear.mockResolvedValue({ id: 2, rol: 'staff', estado: 'activo' });
+    usuarioRepository.buscarIdsPorCodigo.mockResolvedValue({ id_rol: 3, id_estado: 4 });
+    usuarioRepository.crearPendientePorAdmin.mockResolvedValue({
+      id: 2,
+      rol: 'staff',
+      estado: 'pendiente_verificacion',
+      email: 'lucia@tumo.world',
+    });
 
     const res = await request(app)
       .post('/api/v1/usuarios')
@@ -77,13 +82,12 @@ describe('cuenta con cambio de contraseña pendiente', () => {
       .send({
         nombre: 'Lucía',
         apellido: 'Gómez',
-        documento: '45678901',
+        documento: '45678905',
         email: 'lucia@tumo.world',
-        password: 'Inicial12345',
         rol: 'staff',
       });
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(202);
   });
 });
 

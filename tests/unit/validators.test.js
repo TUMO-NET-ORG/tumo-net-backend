@@ -38,7 +38,7 @@ describe('política de contraseña (RNF07: mínimo 10 caracteres)', () => {
     ['abcdefghij', 'sin números'],
   ])('rechaza "%s" (%s)', (nuevaPassword) => {
     const { error } = restablecerPasswordSchema.validate({ token, nuevaPassword });
-    expect(error.message).toMatch(/al menos 10 caracteres y un número/);
+    expect(error.message).toMatch(/al menos 10 caracteres, una letra y un número/);
   });
 
   test('acepta una contraseña de 10 caracteres con número', () => {
@@ -53,7 +53,7 @@ describe('política de contraseña (RNF07: mínimo 10 caracteres)', () => {
     const { error } = altaUsuarioSchema.validate({
       nombre: 'Ana',
       apellido: 'Pérez',
-      documento: '12345678',
+      documento: '45678905',
       email: 'ana@tumo.world',
       password: 'corta1',
       aceptaTerminos: true,

@@ -3,7 +3,10 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const AppError = require('../errors/AppError');
 const authRepository = require('../repositories/auth.repository');
-const { enviarEnlaceRecuperacion } = require('./mail.service');
+const {
+  enviarEnlaceAccion,
+  enviarEnlaceRecuperacion,
+} = require('./mail.service');
 
 const MAX_INTENTOS = 5;
 const DURACION_BLOQUEO_MINUTOS = 15;
@@ -250,12 +253,64 @@ async function solicitarRecuperacion(email) {
   }
 }
 
-async function restablecerPassword(token, nuevaPassword) {
+async function obtenerTipoTokenPassword(token) {
+  const accion = await authRepository.buscarTokenAccion(hashearCodigo(token));
+  if (
+    !accion ||
+    accion.usado ||
+    new Date(accion.fechaExpiracion).getTime() <= Date.now() ||
+    !['recuperacion', 'invitacion'].includes(accion.tipo)
+  ) {
+    throw new AppError(400, MENSAJE_TOKEN_INVALIDO, 'TOKEN_INVALIDO');
+  }
+  return { tipo: accion.tipo };
+}
+
+async function restablecerPassword(
+  token,
+  nuevaPassword,
+  aceptaTerminos = false,
+  versionTerminos = '1.0',
+) {
+  const tokenHash = hashearCodigo(token);
+  const accion = await authRepository.buscarTokenAccion(tokenHash);
+  if (!accion) {
+    const passwordHash = await argon2.hash(nuevaPassword);
+    const actualizado = await authRepository.restablecerPassword(
+      tokenHash,
+      passwordHash,
+    );
+    if (!actualizado) {
+      throw new AppError(400, MENSAJE_TOKEN_INVALIDO, 'TOKEN_INVALIDO');
+    }
+    return;
+  }
+  if (
+    !accion ||
+    accion.usado ||
+    new Date(accion.fechaExpiracion).getTime() <= Date.now() ||
+    !['recuperacion', 'invitacion'].includes(accion.tipo)
+  ) {
+    throw new AppError(400, MENSAJE_TOKEN_INVALIDO, 'TOKEN_INVALIDO');
+  }
+
   const passwordHash = await argon2.hash(nuevaPassword);
-  const actualizado = await authRepository.restablecerPassword(
-    hashearCodigo(token),
-    passwordHash,
-  );
+  if (accion.tipo === 'invitacion') {
+    if (!aceptaTerminos) {
+      throw new AppError(
+        400,
+        'Es necesario aceptar los términos y condiciones',
+        'TERMINOS_NO_ACEPTADOS',
+      );
+    }
+    return authRepository.completarInvitacion(
+      tokenHash,
+      passwordHash,
+      versionTerminos,
+    );
+  }
+
+  const actualizado = await authRepository.restablecerPassword(tokenHash, passwordHash);
 
   if (!actualizado) {
     throw new AppError(400, MENSAJE_TOKEN_INVALIDO, 'TOKEN_INVALIDO');
@@ -306,6 +361,23 @@ async function cambiarPassword(sesion, passwordActual, nuevaPassword) {
   };
 }
 
+async function confirmarCambioEmail(token) {
+  const actualizado = await authRepository.completarCambioEmail(hashearCodigo(token));
+  if (!actualizado) {
+    throw new AppError(400, MENSAJE_TOKEN_INVALIDO, 'TOKEN_INVALIDO');
+  }
+  if (actualizado.pendienteVerificacion) {
+    const nuevoToken = crypto.randomBytes(32).toString('hex');
+    await authRepository.crearTokenAccion(
+      actualizado.usuarioId,
+      hashearCodigo(nuevoToken),
+      new Date(Date.now() + DURACION_RECUPERACION_MINUTOS * 60 * 1000),
+      'invitacion',
+    );
+    await enviarEnlaceAccion(actualizado.email, nuevoToken, 'invitacion');
+  }
+}
+
 module.exports = {
   cambiarPassword,
   iniciarSesion,
@@ -314,4 +386,6 @@ module.exports = {
   verificarEmail,
   solicitarRecuperacion,
   restablecerPassword,
+  obtenerTipoTokenPassword,
+  confirmarCambioEmail,
 };

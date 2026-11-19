@@ -121,4 +121,40 @@ async function enviarEnlaceRecuperacion(email, token) {
   }
 }
 
-module.exports = { enviarCodigoVerificacion, enviarEnlaceRecuperacion };
+async function enviarEnlaceAccion(email, token, tipo) {
+  try {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const enlace = `${frontendUrl}/${tipo === 'invitacion' ? 'establecer-contrasena' : 'verificar-email'}#token=${encodeURIComponent(token)}`;
+    const esInvitacion = tipo === 'invitacion';
+    const asunto = esInvitacion
+      ? 'Activá tu cuenta de TUMO'
+      : 'Confirmá tu nuevo email de TUMO';
+    const texto = esInvitacion
+      ? `Un administrador creó una cuenta para vos. Abrí este enlace para verificar tu email, aceptar los términos y definir tu contraseña:\n\n${enlace}`
+      : `Solicitaste cambiar tu email de TUMO. Abrí este enlace para confirmar la nueva dirección:\n\n${enlace}`;
+
+    await obtenerTransporter().sendMail({
+      from: process.env.SMTP_FROM,
+      to: email,
+      subject: asunto,
+      text: texto,
+      html: `<p>${texto.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>`,
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    console.error('Error enviando enlace de acción:', error.message);
+    throw new AppError(
+      502,
+      'No se pudo enviar el enlace por email',
+      'ENLACE_EMAIL_NO_ENVIADO',
+    );
+  }
+}
+
+module.exports = {
+  enviarCodigoVerificacion,
+  enviarEnlaceRecuperacion,
+  enviarEnlaceAccion,
+};

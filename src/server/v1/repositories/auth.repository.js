@@ -242,6 +242,150 @@ async function restablecerPassword(tokenHash, passwordHash) {
   }
 }
 
+async function crearTokenAccion(
+  usuarioId,
+  tokenHash,
+  fechaExpiracion,
+  tipo,
+  emailPendiente = null,
+) {
+  const conexion = await pool.getConnection();
+
+  try {
+    await conexion.beginTransaction();
+    await conexion.execute(
+      `UPDATE token_recuperacion
+       SET usado = 1, fecha_uso = CURRENT_TIMESTAMP
+       WHERE usuario_id = ? AND tipo = ? AND usado = 0`,
+      [usuarioId, tipo],
+    );
+    await conexion.execute(
+      `INSERT INTO token_recuperacion (
+         usuario_id, token_hash, tipo, email_pendiente, fecha_expiracion
+       ) VALUES (?, ?, ?, ?, ?)`,
+      [usuarioId, tokenHash, tipo, emailPendiente, fechaExpiracion],
+    );
+    await conexion.commit();
+    return true;
+  } catch (error) {
+    await conexion.rollback();
+    throw error;
+  } finally {
+    conexion.release();
+  }
+}
+
+async function buscarTokenAccion(tokenHash) {
+  const [filas] = await pool.execute(
+    `SELECT usuario_id AS usuarioId, tipo, email_pendiente AS emailPendiente,
+            fecha_expiracion AS fechaExpiracion, usado
+     FROM token_recuperacion
+     WHERE token_hash = ?`,
+    [tokenHash],
+  );
+  return filas[0];
+}
+
+async function completarInvitacion(tokenHash, passwordHash, versionTerminos) {
+  const conexion = await pool.getConnection();
+
+  try {
+    await conexion.beginTransaction();
+    const [tokens] = await conexion.execute(
+      `SELECT usuario_id
+       FROM token_recuperacion
+       WHERE token_hash = ? AND tipo = 'invitacion' AND usado = 0
+         AND fecha_expiracion > CURRENT_TIMESTAMP
+       FOR UPDATE`,
+      [tokenHash],
+    );
+    if (tokens.length === 0) {
+      await conexion.rollback();
+      return false;
+    }
+
+    const [actualizacion] = await conexion.execute(
+      `UPDATE usuarios
+       SET password_hash = ?, password_version = password_version + 1,
+           debe_cambiar_password = 0,
+           fecha_aceptacion_terminos = CURRENT_TIMESTAMP,
+           version_terminos = ?,
+           id_estado = (SELECT id FROM estado_usuario WHERE codigo = 'activo')
+       WHERE id = ? AND id_estado = (
+         SELECT id FROM estado_usuario WHERE codigo = 'pendiente_verificacion'
+       )`,
+      [passwordHash, versionTerminos, tokens[0].usuario_id],
+    );
+    if (actualizacion.affectedRows !== 1) {
+      await conexion.rollback();
+      return false;
+    }
+
+    await conexion.execute(
+      `UPDATE token_recuperacion
+       SET usado = 1, fecha_uso = CURRENT_TIMESTAMP
+       WHERE token_hash = ?`,
+      [tokenHash],
+    );
+    await conexion.commit();
+    return true;
+  } catch (error) {
+    await conexion.rollback();
+    throw error;
+  } finally {
+    conexion.release();
+  }
+}
+
+async function completarCambioEmail(tokenHash) {
+  const conexion = await pool.getConnection();
+
+  try {
+    await conexion.beginTransaction();
+    const [tokens] = await conexion.execute(
+      `SELECT t.usuario_id, t.email_pendiente, e.codigo AS estado
+       FROM token_recuperacion t
+       INNER JOIN usuarios u ON u.id = t.usuario_id
+       INNER JOIN estado_usuario e ON e.id = u.id_estado
+       WHERE t.token_hash = ? AND t.tipo = 'cambio_email' AND t.usado = 0
+         AND t.fecha_expiracion > CURRENT_TIMESTAMP
+       FOR UPDATE`,
+      [tokenHash],
+    );
+    const token = tokens[0];
+    if (!token || !token.email_pendiente) {
+      await conexion.rollback();
+      return false;
+    }
+
+    const [actualizacion] = await conexion.execute(
+      'UPDATE usuarios SET email = ? WHERE id = ?',
+      [token.email_pendiente, token.usuario_id],
+    );
+    if (actualizacion.affectedRows !== 1) {
+      await conexion.rollback();
+      return false;
+    }
+    await conexion.execute(
+      `UPDATE token_recuperacion
+       SET usado = 1, fecha_uso = CURRENT_TIMESTAMP
+       WHERE token_hash = ?`,
+      [tokenHash],
+    );
+    await conexion.commit();
+    return {
+      usuarioId: token.usuario_id,
+      email: token.email_pendiente,
+      pendienteVerificacion: token.estado === 'pendiente_verificacion',
+    };
+  } catch (error) {
+    await conexion.rollback();
+    throw error;
+  } finally {
+    conexion.release();
+  }
+}
+
 // Cambio de contraseña con sesión iniciada: invalida los tokens anteriores
 // (password_version) y levanta la obligación de cambiarla.
 async function actualizarPassword(id, passwordHash) {
@@ -310,5 +454,9 @@ module.exports = {
   registrarIntentoVerificacion,
   confirmarEmail,
   crearTokenRecuperacion,
+  crearTokenAccion,
+  buscarTokenAccion,
+  completarInvitacion,
+  completarCambioEmail,
   restablecerPassword,
 };

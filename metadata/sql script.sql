@@ -64,11 +64,14 @@ create table token_recuperacion (
   id int unsigned auto_increment primary key,
   usuario_id int unsigned not null,
   token_hash char(64) not null,
+  tipo varchar(30) not null default 'recuperacion',
+  email_pendiente varchar(255) null,
   fecha_expiracion datetime not null,
   fecha_creacion datetime not null default current_timestamp,
   fecha_uso datetime null,
   usado tinyint not null default 0,
   unique key uk_token_hash (token_hash),
+  index idx_token_accion_usuario_tipo (usuario_id, tipo, usado),
   index idx_token_recuperacion_usuario_fecha (usuario_id, fecha_creacion),
   constraint fk_token_usuario foreign key (usuario_id)
     references usuarios (id) on delete cascade
