@@ -140,6 +140,10 @@ async function obtenerGrupo(grupoId, usuarioActual) {
   };
 }
 
+async function listarUsuariosDisponibles(buscar) {
+  return grupoRepository.listarUsuariosDisponibles({ buscar });
+}
+
 // CREAR
 
 async function crearGrupo({ nombre, descripcion, responsables, integrantes }, creadoPorId) {
@@ -216,4 +220,11 @@ async function borrarGrupo(grupoId, usuarioActual) {
   }
 }
 
-module.exports = { listarGrupos, obtenerGrupo, crearGrupo, editarGrupo, borrarGrupo };
+module.exports = {
+  listarGrupos,
+  obtenerGrupo,
+  listarUsuariosDisponibles,
+  crearGrupo,
+  editarGrupo,
+  borrarGrupo,
+};

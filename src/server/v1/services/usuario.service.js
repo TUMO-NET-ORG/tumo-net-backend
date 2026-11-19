@@ -148,6 +148,14 @@ async function crearUsuarioPorAdmin(datos) {
   }
 }
 
+async function obtenerUsuarioPorAdmin(id) {
+  const usuario = await usuarioRepository.buscarPorId(id);
+  if (!usuario) {
+    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
+  }
+  return usuario;
+}
+
 // CU01 (RF1): el administrador edita los datos de un usuario, incluido el
 // rol. El cambio de rol aplica en la próxima petición del usuario, porque el
 // middleware lee el rol desde la base y no desde el token.
@@ -311,6 +319,7 @@ module.exports = {
   crearUsuarioPorAdmin,
   darDeAltaUsuario,
   editarUsuarioPorAdmin,
+  obtenerUsuarioPorAdmin,
   generarPasswordTemporal,
   listarUsuarios,
   reenviarCodigoVerificacion,

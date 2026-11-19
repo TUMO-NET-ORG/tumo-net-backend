@@ -7,6 +7,12 @@ const grupoController = require('../controllers/grupo.controller');
 const router = express.Router();
 
 router.get('/', autenticar, grupoController.listarGrupos);
+router.get(
+  '/usuarios-disponibles',
+  autenticar,
+  requerirRol('administrador', 'staff', 'tutor'),
+  grupoController.listarUsuariosDisponibles,
+);
 router.get('/:id', autenticar, grupoController.obtenerGrupo);
 router.post('/', autenticar, requerirRol('administrador', 'staff', 'tutor'), grupoController.crearGrupo);
 router.put('/:id', autenticar, requerirRol('administrador', 'staff', 'tutor'), grupoController.editarGrupo);

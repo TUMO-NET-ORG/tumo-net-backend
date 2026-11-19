@@ -63,6 +63,30 @@ async function buscarIntegrantes(grupoId) {
   return filas;
 }
 
+async function listarUsuariosDisponibles({ buscar = '' } = {}) {
+  const condiciones = ["e.codigo = 'activo'"];
+  const parametros = [];
+
+  if (buscar) {
+    condiciones.push(
+      `(u.nombre LIKE ? OR u.apellido LIKE ? OR u.email LIKE ?)`,
+    );
+    const patron = `%${buscar.replace(/[\\%_]/g, '\\$&')}%`;
+    parametros.push(patron, patron, patron);
+  }
+
+  const [filas] = await pool.query(
+    `SELECT u.id, u.nombre, u.apellido, u.email, r.codigo AS rol
+       FROM usuarios u
+       JOIN roles r ON r.id = u.id_rol
+       JOIN estado_usuario e ON e.id = u.id_estado
+      WHERE ${condiciones.join(' AND ')}
+      ORDER BY u.apellido, u.nombre, u.id`,
+    parametros,
+  );
+  return filas;
+}
+
 /**
  * Listado paginado de grupos activos.
  * @param soloDelUsuario  si viene un id, trae solo los grupos donde está esa persona
@@ -230,6 +254,7 @@ module.exports = {
   esIntegrante,
   buscarPorId,
   buscarIntegrantes,
+  listarUsuariosDisponibles,
   listar,
   crear,
   actualizar,

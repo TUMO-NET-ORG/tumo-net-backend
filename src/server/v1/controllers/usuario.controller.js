@@ -12,6 +12,7 @@ const {
   darDeAltaUsuario,
   crearUsuarioPorAdmin,
   editarUsuarioPorAdmin,
+  obtenerUsuarioPorAdmin,
   listarUsuarios,
   cambiarEstadoPorAdmin,
   restablecerPasswordPorAdmin,
@@ -44,6 +45,18 @@ async function crearUsuarioAdmin(req, res) {
 
   const usuario = await crearUsuarioPorAdmin(validacion.value);
   return res.status(201).json({ usuario });
+}
+
+// Consulta individual para la pantalla de edición del administrador.
+async function obtenerUsuarioAdmin(req, res) {
+  const validacionId = idUsuarioSchema.validate(req.params.id);
+
+  if (validacionId.error) {
+    return responderIdInvalido(res, validacionId.error);
+  }
+
+  const usuario = await obtenerUsuarioPorAdmin(validacionId.value);
+  return res.status(200).json({ usuario });
 }
 
 function responderIdInvalido(res, error) {
@@ -138,6 +151,7 @@ module.exports = {
   restablecerPasswordAdmin,
   crearUsuario,
   crearUsuarioAdmin,
+  obtenerUsuarioAdmin,
   editarUsuarioAdmin,
   listarUsuariosAdmin,
 };
