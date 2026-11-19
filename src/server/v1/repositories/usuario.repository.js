@@ -112,6 +112,30 @@ async function crear(usuario) {
   return buscarPublicoPorId(pool, resultado.insertId);
 }
 
+async function crearPendientePorAdmin(usuario) {
+  const [resultado] = await pool.execute(
+    `INSERT INTO usuarios (
+       nombre, apellido, documento, email, password_hash,
+       fecha_nacimiento, foto_url, url_portfolio, id_rol, id_estado,
+       debe_cambiar_password
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [
+      usuario.nombre,
+      usuario.apellido,
+      usuario.documento,
+      usuario.email,
+      usuario.passwordHash,
+      usuario.fechaNacimiento ?? null,
+      usuario.fotoUrl ?? null,
+      usuario.urlPortfolio ?? null,
+      usuario.idRol,
+      usuario.idEstado,
+    ],
+  );
+
+  return buscarPublicoPorId(pool, resultado.insertId);
+}
+
 async function buscarPorId(id) {
   return buscarPublicoPorId(pool, id);
 }
@@ -266,5 +290,6 @@ module.exports = {
   buscarIdsPorCodigo,
   buscarPorId,
   crear,
+  crearPendientePorAdmin,
   crearConVerificacion,
 };

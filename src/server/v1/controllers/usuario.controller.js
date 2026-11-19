@@ -13,6 +13,8 @@ const {
   crearUsuarioPorAdmin,
   editarUsuarioPorAdmin,
   listarUsuarios,
+  obtenerUsuarioPorAdmin,
+  solicitarCambioEmailPorAdmin,
   cambiarEstadoPorAdmin,
   restablecerPasswordPorAdmin,
 } = require('../services/usuario.service');
@@ -43,7 +45,7 @@ async function crearUsuarioAdmin(req, res) {
   }
 
   const usuario = await crearUsuarioPorAdmin(validacion.value);
-  return res.status(201).json({ usuario });
+  return res.status(202).json({ usuario });
 }
 
 function responderIdInvalido(res, error) {
@@ -51,6 +53,17 @@ function responderIdInvalido(res, error) {
     error: 'DATOS_INVALIDOS',
     detalles: [{ campo: 'id', mensaje: error.message }],
   });
+}
+
+async function obtenerUsuarioAdmin(req, res) {
+  const validacionId = idUsuarioSchema.validate(req.params.id);
+
+  if (validacionId.error) {
+    return responderIdInvalido(res, validacionId.error);
+  }
+
+  const usuario = await obtenerUsuarioPorAdmin(validacionId.value);
+  return res.status(200).json({ usuario });
 }
 
 // CU01 (RF1): edición de datos por el administrador.
@@ -75,6 +88,25 @@ async function editarUsuarioAdmin(req, res) {
     req.usuario,
   );
   return res.status(200).json({ usuario });
+}
+
+async function solicitarCambioEmailAdmin(req, res) {
+  const validacionId = idUsuarioSchema.validate(req.params.id);
+  if (validacionId.error) {
+    return responderIdInvalido(res, validacionId.error);
+  }
+
+  const { emailSchema } = require('../validators/email.validator');
+  const validacion = emailSchema.validate(req.body?.email);
+  if (validacion.error) {
+    return responderDatosInvalidos(res, validacion.error);
+  }
+
+  const resultado = await solicitarCambioEmailPorAdmin(
+    validacionId.value,
+    validacion.value,
+  );
+  return res.status(202).json(resultado);
 }
 
 // CU01 (flujo principal, paso 2): listado con búsqueda, filtros y paginación.
@@ -138,6 +170,8 @@ module.exports = {
   restablecerPasswordAdmin,
   crearUsuario,
   crearUsuarioAdmin,
+  obtenerUsuarioAdmin,
   editarUsuarioAdmin,
+  solicitarCambioEmailAdmin,
   listarUsuariosAdmin,
 };

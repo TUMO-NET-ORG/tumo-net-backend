@@ -52,7 +52,13 @@ const altaUsuarioSchema = Joi.object({
 // CU01 (RF1): alta individual por el administrador. La contraseña es la
 // inicial que define el administrador y se valida con la política de RNF07.
 const altaUsuarioAdminSchema = Joi.object({
-  ...datosPersonales,
+  nombre: datosPersonales.nombre,
+  apellido: datosPersonales.apellido,
+  documento: datosPersonales.documento,
+  email: datosPersonales.email,
+  fechaNacimiento: datosPersonales.fechaNacimiento,
+  fotoUrl: datosPersonales.fotoUrl,
+  urlPortfolio: datosPersonales.urlPortfolio,
   rol: Joi.string()
     .valid(...ROLES)
     .required()
@@ -68,6 +74,9 @@ const editarUsuarioSchema = altaUsuarioAdminSchema
     campo.optional(),
   )
   .keys({
+    email: Joi.forbidden().messages({
+      'any.unknown': 'El email debe modificarse mediante verificación',
+    }),
     password: Joi.forbidden().messages({
       'any.unknown': 'La contraseña no se puede modificar por esta vía',
     }),

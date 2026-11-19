@@ -9,6 +9,8 @@ const {
   reenviarVerificacion,
   solicitarRecuperacion,
   restablecerPassword,
+  informarTokenPassword,
+  confirmarCambioEmailController,
 } = require('../controllers/auth.controller');
 const {
   autenticarPermitiendoCambioPendiente,
@@ -66,5 +68,7 @@ router.post('/verify-email', verificacionLimiter, verificarEmail);
 router.post('/resend-verification', reenvioLimiter, reenviarVerificacion);
 router.post('/forgot-password', recoveryRequestLimiter, solicitarRecuperacion);
 router.post('/reset-password', recoveryResetLimiter, restablecerPassword);
+router.get('/password-token-info', informarTokenPassword);
+router.post('/confirm-email-change', confirmarCambioEmailController);
 
 module.exports = router;

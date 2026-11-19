@@ -121,4 +121,56 @@ async function enviarEnlaceRecuperacion(email, token) {
   }
 }
 
-module.exports = { enviarCodigoVerificacion, enviarEnlaceRecuperacion };
+async function enviarEnlaceAccion(email, token, tipo) {
+  try {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const enlace = `${frontendUrl}/${tipo === 'invitacion' ? 'establecer-contrasena' : 'verificar-email'}#token=${encodeURIComponent(token)}`;
+    const esInvitacion = tipo === 'invitacion';
+    const asunto = esInvitacion
+      ? 'Activá tu cuenta de TUMO'
+      : 'Confirmá el cambio de mail de TUMO';
+    const mensajeHtml = esInvitacion
+      ? 'Un administrador creó una cuenta para vos. Usá el botón para verificar tu email, aceptar los términos y definir tu contraseña.'
+      : 'Solicitaste cambiar tu email de TUMO. Usá el botón para confirmar la nueva dirección.';
+    const botonHtml = esInvitacion
+      ? `
+          <a
+            href="${enlace}"
+            style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px"
+          >
+            Activar cuenta
+          </a>
+        `
+      : `
+          <a
+            href="${enlace}"
+            style="display:inline-block;padding:12px 20px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px"
+          >
+            Confirmar cambio de mail
+          </a>
+        `;
+
+    await obtenerTransporter().sendMail({
+      from: process.env.SMTP_FROM,
+      to: email,
+      subject: asunto,
+      html: `<p>${mensajeHtml}</p><p>${botonHtml}</p>`,
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    console.error('Error enviando enlace de acción:', error.message);
+    throw new AppError(
+      502,
+      'No se pudo enviar el enlace por email',
+      'ENLACE_EMAIL_NO_ENVIADO',
+    );
+  }
+}
+
+module.exports = {
+  enviarCodigoVerificacion,
+  enviarEnlaceRecuperacion,
+  enviarEnlaceAccion,
+};

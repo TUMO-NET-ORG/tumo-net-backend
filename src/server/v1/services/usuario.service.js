@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const AppError = require('../errors/AppError');
 const usuarioRepository = require('../repositories/usuario.repository');
 const authRepository = require('../repositories/auth.repository');
-const { enviarCodigoVerificacion } = require('./mail.service');
+const { enviarCodigoVerificacion, enviarEnlaceAccion } = require('./mail.service');
 
 const DURACION_CODIGO_MINUTOS = 15;
 
@@ -115,7 +115,10 @@ function errorDuplicado(error) {
 // indicado. La cuenta queda activa (no requiere verificar el email, porque la
 // crea el administrador) y la contraseña inicial se guarda hasheada (RNF07).
 async function crearUsuarioPorAdmin(datos) {
-  const ids = await usuarioRepository.buscarIdsPorCodigo(datos.rol, 'activo');
+  const ids = await usuarioRepository.buscarIdsPorCodigo(
+    datos.rol,
+    'pendiente_verificacion',
+  );
 
   if (!ids || ids.id_estado === null) {
     throw new AppError(
@@ -129,23 +132,60 @@ async function crearUsuarioPorAdmin(datos) {
     throw new AppError(400, 'El rol indicado no existe', 'ROL_INVALIDO');
   }
 
-  const { password, ...datosUsuario } = datos;
-  const passwordHash = await argon2.hash(password);
+  const passwordHash = await argon2.hash(crypto.randomBytes(32).toString('hex'));
 
   try {
-    return await usuarioRepository.crear({
-      ...datosUsuario,
+    const usuario = await usuarioRepository.crearPendientePorAdmin({
+      ...datos,
       passwordHash,
       idRol: ids.id_rol,
       idEstado: ids.id_estado,
     });
+    const token = crypto.randomBytes(32).toString('hex');
+    await authRepository.crearTokenAccion(
+      usuario.id,
+      hashearCodigo(token),
+      new Date(Date.now() + DURACION_CODIGO_MINUTOS * 60 * 1000),
+      'invitacion',
+    );
+    try {
+      await enviarEnlaceAccion(datos.email, token, 'invitacion');
+    } catch (error) {
+      throw new AppError(
+        502,
+        'La cuenta quedó pendiente, pero no se pudo enviar el enlace',
+        'INVITACION_NO_ENVIADA',
+      );
+    }
+    return usuario;
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
       throw errorDuplicado(error);
     }
-
     throw error;
   }
+}
+
+async function solicitarCambioEmailPorAdmin(id, email) {
+  const usuario = await usuarioRepository.buscarPorId(id);
+  if (!usuario) {
+    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
+  }
+  const existente = await authRepository.buscarPorEmail(email);
+  if (existente && existente.id !== id) {
+    throw new AppError(409, 'Ya existe un usuario con ese email', 'EMAIL_DUPLICADO');
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  await authRepository.crearTokenAccion(
+    id,
+    hashearCodigo(token),
+    new Date(Date.now() + DURACION_CODIGO_MINUTOS * 60 * 1000),
+    'cambio_email',
+    email,
+  );
+  await enviarEnlaceAccion(email, token, 'cambio_email');
+  return { mensaje: 'Se envió un enlace de confirmación al nuevo email' };
 }
 
 // CU01 (RF1): el administrador edita los datos de un usuario, incluido el
@@ -274,6 +314,14 @@ async function listarUsuarios({ busqueda, rol, estado, pagina, tamanioPagina }) 
   };
 }
 
+async function obtenerUsuarioPorAdmin(id) {
+  const usuario = await usuarioRepository.buscarPorId(id);
+  if (!usuario) {
+    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
+  }
+  return usuario;
+}
+
 // Genera un código nuevo para un usuario que quedó pendiente de verificación
 // (por ejemplo, si el mail del registro no llegó o el código venció).
 // Responde igual exista o no la cuenta, para no revelar emails registrados.
@@ -313,6 +361,8 @@ module.exports = {
   editarUsuarioPorAdmin,
   generarPasswordTemporal,
   listarUsuarios,
+  solicitarCambioEmailPorAdmin,
+  obtenerUsuarioPorAdmin,
   reenviarCodigoVerificacion,
   restablecerPasswordPorAdmin,
 };

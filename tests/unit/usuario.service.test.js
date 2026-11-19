@@ -20,7 +20,6 @@ function datosAlta(cambios = {}) {
     apellido: 'Gómez',
     documento: '45678905',
     email: 'lucia@tumo.world',
-    password: 'Inicial12345',
     rol: 'tutor',
     ...cambios,
   };
@@ -34,7 +33,7 @@ function usuarioCreado(cambios = {}) {
     documento: '45678905',
     email: 'lucia@tumo.world',
     rol: 'tutor',
-    estado: 'activo',
+    estado: 'pendiente_verificacion',
     ...cambios,
   };
 }
@@ -48,20 +47,20 @@ function errorDuplicado(indice) {
 
 describe('crearUsuarioPorAdmin (CU01 – alta individual, RF1)', () => {
   beforeEach(() => {
-    usuarioRepository.buscarIdsPorCodigo.mockResolvedValue({ id_rol: 4, id_estado: 1 });
-    usuarioRepository.crear.mockResolvedValue(usuarioCreado());
+    usuarioRepository.buscarIdsPorCodigo.mockResolvedValue({ id_rol: 4, id_estado: 4 });
+    usuarioRepository.crearPendientePorAdmin.mockResolvedValue(usuarioCreado());
   });
 
-  test('crea el usuario activo con el rol indicado y lo devuelve', async () => {
+  test('crea el usuario pendiente con el rol indicado y lo devuelve', async () => {
     const usuario = await crearUsuarioPorAdmin(datosAlta());
 
-    expect(usuarioRepository.buscarIdsPorCodigo).toHaveBeenCalledWith('tutor', 'activo');
-    expect(usuarioRepository.crear).toHaveBeenCalledWith(
+    expect(usuarioRepository.buscarIdsPorCodigo).toHaveBeenCalledWith('tutor', 'pendiente_verificacion');
+    expect(usuarioRepository.crearPendientePorAdmin).toHaveBeenCalledWith(
       expect.objectContaining({
         nombre: 'Lucía',
         email: 'lucia@tumo.world',
         idRol: 4,
-        idEstado: 1,
+        idEstado: 4,
       }),
     );
     expect(usuario).toEqual(usuarioCreado());
@@ -70,21 +69,24 @@ describe('crearUsuarioPorAdmin (CU01 – alta individual, RF1)', () => {
   test('guarda la contraseña con hash argon2, nunca en texto plano (RNF07)', async () => {
     await crearUsuarioPorAdmin(datosAlta());
 
-    const guardado = usuarioRepository.crear.mock.calls[0][0];
+    const guardado = usuarioRepository.crearPendientePorAdmin.mock.calls[0][0];
     expect(guardado).not.toHaveProperty('password');
     expect(JSON.stringify(guardado)).not.toContain('Inicial12345');
     expect(guardado.passwordHash).toMatch(/^\$argon2/);
-    await expect(argon2.verify(guardado.passwordHash, 'Inicial12345')).resolves.toBe(true);
   });
 
-  test('no envía código de verificación por mail (la cuenta ya queda activa)', async () => {
+  test('envía una invitación por mail', async () => {
     await crearUsuarioPorAdmin(datosAlta());
 
-    expect(mailService.enviarCodigoVerificacion).not.toHaveBeenCalled();
+    expect(mailService.enviarEnlaceAccion).toHaveBeenCalledWith(
+      'lucia@tumo.world',
+      expect.any(String),
+      'invitacion',
+    );
   });
 
   test('con un email ya registrado responde 409 EMAIL_DUPLICADO', async () => {
-    usuarioRepository.crear.mockRejectedValue(errorDuplicado('uk_usuario_email'));
+    usuarioRepository.crearPendientePorAdmin.mockRejectedValue(errorDuplicado('uk_usuario_email'));
 
     await expect(crearUsuarioPorAdmin(datosAlta())).rejects.toMatchObject({
       statusCode: 409,
@@ -93,7 +95,7 @@ describe('crearUsuarioPorAdmin (CU01 – alta individual, RF1)', () => {
   });
 
   test('con un documento ya registrado responde 409 DOCUMENTO_DUPLICADO', async () => {
-    usuarioRepository.crear.mockRejectedValue(errorDuplicado('uk_usuario_documento'));
+    usuarioRepository.crearPendientePorAdmin.mockRejectedValue(errorDuplicado('uk_usuario_documento'));
 
     await expect(crearUsuarioPorAdmin(datosAlta())).rejects.toMatchObject({
       statusCode: 409,
@@ -108,10 +110,10 @@ describe('crearUsuarioPorAdmin (CU01 – alta individual, RF1)', () => {
       statusCode: 400,
       code: 'ROL_INVALIDO',
     });
-    expect(usuarioRepository.crear).not.toHaveBeenCalled();
+    expect(usuarioRepository.crearPendientePorAdmin).not.toHaveBeenCalled();
   });
 
-  test('si falta el estado "activo" en la base responde 500 de configuración', async () => {
+  test('si falta el estado pendiente en la base responde 500 de configuración', async () => {
     usuarioRepository.buscarIdsPorCodigo.mockResolvedValue({ id_rol: 4, id_estado: null });
 
     await expect(crearUsuarioPorAdmin(datosAlta())).rejects.toMatchObject({
@@ -121,7 +123,7 @@ describe('crearUsuarioPorAdmin (CU01 – alta individual, RF1)', () => {
   });
 
   test('propaga los errores inesperados de la base', async () => {
-    usuarioRepository.crear.mockRejectedValue(new Error('conexión perdida'));
+    usuarioRepository.crearPendientePorAdmin.mockRejectedValue(new Error('conexión perdida'));
 
     await expect(crearUsuarioPorAdmin(datosAlta())).rejects.toThrow('conexión perdida');
   });

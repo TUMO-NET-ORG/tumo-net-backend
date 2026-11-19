@@ -35,7 +35,6 @@ function cuerpo(cambios = {}) {
     apellido: 'Gómez',
     documento: '45678905',
     email: 'lucia@tumo.world',
-    password: 'Inicial12345',
     rol: 'staff',
     ...cambios,
   };
@@ -43,15 +42,15 @@ function cuerpo(cambios = {}) {
 
 describe('POST /api/v1/usuarios (CU01 – alta por administrador)', () => {
   beforeEach(() => {
-    usuarioRepository.buscarIdsPorCodigo.mockResolvedValue({ id_rol: 3, id_estado: 1 });
-    usuarioRepository.crear.mockResolvedValue({
+    usuarioRepository.buscarIdsPorCodigo.mockResolvedValue({ id_rol: 3, id_estado: 4 });
+    usuarioRepository.crearPendientePorAdmin.mockResolvedValue({
       id: 15,
       nombre: 'Lucía',
       apellido: 'Gómez',
       documento: '45678905',
       email: 'lucia@tumo.world',
       rol: 'staff',
-      estado: 'activo',
+      estado: 'pendiente_verificacion',
     });
   });
 
@@ -59,7 +58,7 @@ describe('POST /api/v1/usuarios (CU01 – alta por administrador)', () => {
     const res = await request(app).post(URL).send(cuerpo());
 
     expect(res.status).toBe(401);
-    expect(usuarioRepository.crear).not.toHaveBeenCalled();
+    expect(usuarioRepository.crearPendientePorAdmin).not.toHaveBeenCalled();
   });
 
   test.each(['alumno', 'staff', 'tutor'])('con rol %s responde 403 (RNF12)', async (rol) => {
@@ -70,41 +69,41 @@ describe('POST /api/v1/usuarios (CU01 – alta por administrador)', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('SIN_PERMISO');
-    expect(usuarioRepository.crear).not.toHaveBeenCalled();
+    expect(usuarioRepository.crearPendientePorAdmin).not.toHaveBeenCalled();
   });
 
-  test('como administrador crea el usuario activo y responde 201', async () => {
+  test('como administrador crea el usuario pendiente y responde 202', async () => {
     const res = await request(app)
       .post(URL)
       .set('Authorization', `Bearer ${sesion('administrador')}`)
       .send(cuerpo());
 
-    expect(res.status).toBe(201);
-    expect(res.body.usuario).toMatchObject({ id: 15, rol: 'staff', estado: 'activo' });
+    expect(res.status).toBe(202);
+    expect(res.body.usuario).toMatchObject({ id: 15, rol: 'staff', estado: 'pendiente_verificacion' });
     expect(res.body.usuario).not.toHaveProperty('passwordHash');
-    expect(usuarioRepository.buscarIdsPorCodigo).toHaveBeenCalledWith('staff', 'activo');
+    expect(usuarioRepository.buscarIdsPorCodigo).toHaveBeenCalledWith('staff', 'pendiente_verificacion');
   });
 
   test('con datos faltantes o inválidos responde 400 con el detalle (4.a)', async () => {
     const res = await request(app)
       .post(URL)
       .set('Authorization', `Bearer ${sesion('administrador')}`)
-      .send({ email: 'no-es-email', password: 'corta', rol: 'superusuario' });
+      .send({ email: 'no-es-email', rol: 'superusuario' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('DATOS_INVALIDOS');
     const campos = res.body.detalles.map((d) => d.campo);
     expect(campos).toEqual(
-      expect.arrayContaining(['nombre', 'apellido', 'documento', 'email', 'password', 'rol']),
+      expect.arrayContaining(['nombre', 'apellido', 'documento', 'email', 'rol']),
     );
-    expect(usuarioRepository.crear).not.toHaveBeenCalled();
+    expect(usuarioRepository.crearPendientePorAdmin).not.toHaveBeenCalled();
   });
 
   test('con email ya registrado responde 409', async () => {
     const duplicado = new Error("Duplicate entry for key 'usuarios.uk_usuario_email'");
     duplicado.code = 'ER_DUP_ENTRY';
     duplicado.sqlMessage = duplicado.message;
-    usuarioRepository.crear.mockRejectedValue(duplicado);
+    usuarioRepository.crearPendientePorAdmin.mockRejectedValue(duplicado);
 
     const res = await request(app)
       .post(URL)
@@ -150,16 +149,16 @@ describe('PATCH /api/v1/usuarios/:id (CU01 – edición por administrador)', () 
     expect(usuarioRepository.actualizar).not.toHaveBeenCalled();
   });
 
-  test('como administrador actualiza email y rol y responde 200', async () => {
+  test('como administrador actualiza datos y rol y responde 200', async () => {
     const res = await request(app)
       .patch(URL_USUARIO)
       .set('Authorization', `Bearer ${sesion('administrador')}`)
-      .send({ email: 'Lucia.Gomez@tumo.world', rol: 'tutor' });
+      .send({ nombre: 'Lucía María', rol: 'tutor' });
 
     expect(res.status).toBe(200);
     expect(res.body.usuario).toMatchObject({ id: 15, rol: 'tutor' });
     expect(usuarioRepository.actualizar).toHaveBeenCalledWith(15, {
-      email: 'lucia.gomez@tumo.world',
+      nombre: 'Lucía María',
       idRol: 4,
     });
   });
@@ -194,19 +193,15 @@ describe('PATCH /api/v1/usuarios/:id (CU01 – edición por administrador)', () 
     expect(res.body.error).toBe('USUARIO_NO_ENCONTRADO');
   });
 
-  test('con email de otro usuario responde 409', async () => {
-    const duplicado = new Error("Duplicate entry for key 'usuarios.uk_usuario_email'");
-    duplicado.code = 'ER_DUP_ENTRY';
-    duplicado.sqlMessage = duplicado.message;
-    usuarioRepository.actualizar.mockRejectedValue(duplicado);
-
+  test('el email directo requiere el flujo de verificación', async () => {
     const res = await request(app)
       .patch(URL_USUARIO)
       .set('Authorization', `Bearer ${sesion('administrador')}`)
       .send({ email: 'ana@tumo.world' });
 
-    expect(res.status).toBe(409);
-    expect(res.body.error).toBe('EMAIL_DUPLICADO');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('DATOS_INVALIDOS');
+    expect(usuarioRepository.actualizar).not.toHaveBeenCalled();
   });
 });
 
