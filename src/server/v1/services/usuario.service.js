@@ -166,11 +166,20 @@ async function crearUsuarioPorAdmin(datos) {
   }
 }
 
+async function obtenerUsuarioPorAdmin(id) {
+  const usuario = await usuarioRepository.buscarPorId(id);
+  if (!usuario) {
+    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
+  }
+  return usuario;
+}
+
 async function solicitarCambioEmailPorAdmin(id, email) {
   const usuario = await usuarioRepository.buscarPorId(id);
   if (!usuario) {
     throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
   }
+
   const existente = await authRepository.buscarPorEmail(email);
   if (existente && existente.id !== id) {
     throw new AppError(409, 'Ya existe un usuario con ese email', 'EMAIL_DUPLICADO');
@@ -314,14 +323,6 @@ async function listarUsuarios({ busqueda, rol, estado, pagina, tamanioPagina }) 
   };
 }
 
-async function obtenerUsuarioPorAdmin(id) {
-  const usuario = await usuarioRepository.buscarPorId(id);
-  if (!usuario) {
-    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
-  }
-  return usuario;
-}
-
 // Genera un código nuevo para un usuario que quedó pendiente de verificación
 // (por ejemplo, si el mail del registro no llegó o el código venció).
 // Responde igual exista o no la cuenta, para no revelar emails registrados.
@@ -359,10 +360,10 @@ module.exports = {
   crearUsuarioPorAdmin,
   darDeAltaUsuario,
   editarUsuarioPorAdmin,
+  obtenerUsuarioPorAdmin,
   generarPasswordTemporal,
   listarUsuarios,
   solicitarCambioEmailPorAdmin,
-  obtenerUsuarioPorAdmin,
   reenviarCodigoVerificacion,
   restablecerPasswordPorAdmin,
 };
