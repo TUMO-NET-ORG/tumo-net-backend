@@ -12,8 +12,8 @@ const {
   darDeAltaUsuario,
   crearUsuarioPorAdmin,
   editarUsuarioPorAdmin,
-  listarUsuarios,
   obtenerUsuarioPorAdmin,
+  listarUsuarios,
   solicitarCambioEmailPorAdmin,
   cambiarEstadoPorAdmin,
   restablecerPasswordPorAdmin,
@@ -48,13 +48,7 @@ async function crearUsuarioAdmin(req, res) {
   return res.status(202).json({ usuario });
 }
 
-function responderIdInvalido(res, error) {
-  return res.status(400).json({
-    error: 'DATOS_INVALIDOS',
-    detalles: [{ campo: 'id', mensaje: error.message }],
-  });
-}
-
+// Consulta individual para la pantalla de edición del administrador.
 async function obtenerUsuarioAdmin(req, res) {
   const validacionId = idUsuarioSchema.validate(req.params.id);
 
@@ -64,6 +58,13 @@ async function obtenerUsuarioAdmin(req, res) {
 
   const usuario = await obtenerUsuarioPorAdmin(validacionId.value);
   return res.status(200).json({ usuario });
+}
+
+function responderIdInvalido(res, error) {
+  return res.status(400).json({
+    error: 'DATOS_INVALIDOS',
+    detalles: [{ campo: 'id', mensaje: error.message }],
+  });
 }
 
 // CU01 (RF1): edición de datos por el administrador.

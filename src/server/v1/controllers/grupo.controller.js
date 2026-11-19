@@ -8,6 +8,7 @@ const {
 const {
   listarGrupos: listarGruposService,
   obtenerGrupo: obtenerGrupoService,
+  listarUsuariosDisponibles: listarUsuariosDisponiblesService,
   crearGrupo: crearGrupoService,
   editarGrupo: editarGrupoService,
   borrarGrupo: borrarGrupoService,
@@ -37,6 +38,12 @@ async function obtenerGrupo(req, res) {
 
   const grupo = await obtenerGrupoService(validacionId.value.id, req.usuario);
   return res.status(200).json({ grupo });
+}
+
+async function listarUsuariosDisponibles(req, res) {
+  const buscar = typeof req.query.buscar === 'string' ? req.query.buscar.trim() : '';
+  const usuarios = await listarUsuariosDisponiblesService(buscar);
+  return res.status(200).json({ usuarios });
 }
 
 // POST /api/v1/grupos
@@ -83,4 +90,11 @@ async function borrarGrupo(req, res) {
   return res.status(204).send(); 
 }
 
-module.exports = { listarGrupos, obtenerGrupo, crearGrupo, editarGrupo, borrarGrupo };
+module.exports = {
+  listarGrupos,
+  obtenerGrupo,
+  listarUsuariosDisponibles,
+  crearGrupo,
+  editarGrupo,
+  borrarGrupo,
+};
