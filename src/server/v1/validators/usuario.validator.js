@@ -22,6 +22,14 @@ const ESTADOS = [
 // activos.
 const ESTADOS_ADMINISTRABLES = ['activo', 'inactivo', 'suspendido', 'dado_de_baja'];
 
+function fechaActualLocal() {
+  const hoy = new Date();
+  const anio = hoy.getFullYear();
+  const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+  const dia = String(hoy.getDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
+}
+
 const datosPersonales = {
   nombre: Joi.string().trim().min(1).max(100).required(),
   apellido: Joi.string().trim().min(1).max(100).required(),
@@ -32,6 +40,14 @@ const datosPersonales = {
     .pattern(/^\d{4}-\d{2}-\d{2}$/)
     .allow(null)
     .optional()
+    .custom((valor, helpers) => {
+      if (valor && valor > fechaActualLocal()) {
+        return helpers.message({
+          custom: 'La fecha de nacimiento no puede ser posterior a hoy',
+        });
+      }
+      return valor;
+    })
     .messages({
       'string.pattern.base': 'debe tener formato YYYY-MM-DD',
     }),
