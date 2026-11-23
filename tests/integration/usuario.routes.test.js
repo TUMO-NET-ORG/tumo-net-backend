@@ -322,6 +322,24 @@ describe('PATCH /api/v1/usuarios/:id/estado (CU01 – flujo 3.b)', () => {
     expect(usuarioRepository.actualizarEstado).toHaveBeenCalledWith(15, 3);
   });
 
+  test('no da de baja al único responsable de un grupo: 409 con los grupos', async () => {
+    usuarioRepository.darDeBajaYQuitarDeGrupos.mockResolvedValue({
+      gruposSinOtroResponsable: [{ id: 7, nombre: 'Robótica' }],
+    });
+
+    const res = await request(app)
+      .patch(URL_ESTADO)
+      .set('Authorization', `Bearer ${sesion('administrador')}`)
+      .send({ estado: 'dado_de_baja' });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({
+      error: 'UNICO_RESPONSABLE_DE_GRUPOS',
+      mensaje: 'No se puede dar de baja: es el único responsable de Robótica. Asigná otro responsable primero.',
+      grupos: [{ id: 7, nombre: 'Robótica' }],
+    });
+  });
+
   test.each([
     ['un estado inexistente', '/15/estado', { estado: 'borrado' }, 'estado'],
     ['pendiente_verificacion', '/15/estado', { estado: 'pendiente_verificacion' }, 'estado'],

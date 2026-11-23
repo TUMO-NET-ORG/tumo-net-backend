@@ -209,3 +209,89 @@ describe('usuarioRepository.restablecerPasswordTemporal (CU01 – flujo 3.a)', (
     expect(conexion.release).toHaveBeenCalled();
   });
 });
+
+describe('usuarioRepository.darDeBajaYQuitarDeGrupos', () => {
+  function conexionFalsa() {
+    const conexion = {
+      beginTransaction: jest.fn(),
+      commit: jest.fn(),
+      rollback: jest.fn(),
+      release: jest.fn(),
+      execute: jest.fn(),
+      query: jest.fn(),
+    };
+    pool.getConnection.mockResolvedValue(conexion);
+    return conexion;
+  }
+
+  test('si no es responsable de ningún grupo, cambia el estado y lo saca de los grupos', async () => {
+    const conexion = conexionFalsa();
+    conexion.execute
+      .mockResolvedValueOnce([[]]) // grupos donde es responsable
+      .mockResolvedValueOnce([{ affectedRows: 1 }]) // UPDATE usuarios
+      .mockResolvedValueOnce([{ affectedRows: 2 }]) // DELETE grupo_integrantes
+      .mockResolvedValueOnce([[{ id: 15, estado: 'dado_de_baja' }]]);
+
+    const resultado = await usuarioRepository.darDeBajaYQuitarDeGrupos(15, 5);
+
+    expect(conexion.execute.mock.calls[1]).toEqual([
+      'UPDATE usuarios SET id_estado = ? WHERE id = ?',
+      [5, 15],
+    ]);
+    expect(conexion.execute.mock.calls[2][0]).toMatch(/DELETE FROM grupo_integrantes WHERE usuario_id = \?/);
+    expect(conexion.execute.mock.calls[2][1]).toEqual([15]);
+    expect(conexion.commit).toHaveBeenCalled();
+    expect(conexion.release).toHaveBeenCalled();
+    expect(resultado).toEqual({ usuario: { id: 15, estado: 'dado_de_baja' } });
+  });
+
+  test('si es responsable junto con otros, se da de baja igual', async () => {
+    const conexion = conexionFalsa();
+    conexion.execute
+      .mockResolvedValueOnce([[{ grupo_id: 7 }]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([[{ id: 15, estado: 'dado_de_baja' }]]);
+    conexion.query
+      .mockResolvedValueOnce([[{ id: 7, nombre: 'Robótica' }]]) // grupos bloqueados
+      .mockResolvedValueOnce([[{ grupo_id: 7 }]]); // otro responsable en el grupo 7
+
+    const resultado = await usuarioRepository.darDeBajaYQuitarDeGrupos(15, 5);
+
+    const [sqlGrupos, paramsGrupos] = conexion.query.mock.calls[0];
+    expect(sqlGrupos).toMatch(/FOR UPDATE/);
+    expect(paramsGrupos).toEqual([[7]]);
+    expect(conexion.query.mock.calls[1][0]).toMatch(/usuario_id <> \?[\s\S]*FOR UPDATE/);
+    expect(conexion.commit).toHaveBeenCalled();
+    expect(resultado.usuario).toEqual({ id: 15, estado: 'dado_de_baja' });
+  });
+
+  test('si es el único responsable de un grupo activo, no cambia nada y devuelve los grupos', async () => {
+    const conexion = conexionFalsa();
+    conexion.execute.mockResolvedValueOnce([[{ grupo_id: 7 }, { grupo_id: 9 }]]);
+    conexion.query
+      .mockResolvedValueOnce([[{ id: 7, nombre: 'Robótica' }, { id: 9, nombre: 'Diseño 3D' }]])
+      .mockResolvedValueOnce([[{ grupo_id: 9 }]]); // el 9 tiene otro responsable, el 7 no
+
+    const resultado = await usuarioRepository.darDeBajaYQuitarDeGrupos(15, 5);
+
+    expect(resultado).toEqual({ gruposSinOtroResponsable: [{ id: 7, nombre: 'Robótica' }] });
+    expect(conexion.execute).toHaveBeenCalledTimes(1); // ni UPDATE ni DELETE
+    expect(conexion.rollback).toHaveBeenCalled();
+    expect(conexion.commit).not.toHaveBeenCalled();
+    expect(conexion.release).toHaveBeenCalled();
+  });
+
+  test('si falla algo deshace todo', async () => {
+    const conexion = conexionFalsa();
+    conexion.execute
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockRejectedValueOnce(new Error('se cortó la base'));
+
+    await expect(usuarioRepository.darDeBajaYQuitarDeGrupos(15, 5)).rejects.toThrow('se cortó la base');
+    expect(conexion.rollback).toHaveBeenCalled();
+    expect(conexion.commit).not.toHaveBeenCalled();
+    expect(conexion.release).toHaveBeenCalled();
+  });
+});

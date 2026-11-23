@@ -111,9 +111,24 @@ describe('POST /api/v1/grupos', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('DATOS_INVALIDOS');
     const campos = res.body.detalles.map((d) => d.campo);
-    expect(campos).toEqual(expect.arrayContaining(['nombre', 'responsables']));
+    // Al crear, responsables es opcional: si no viene, el responsable es quien crea el grupo.
+    expect(campos).toContain('nombre');
+    expect(campos).not.toContain('responsables');
     expect(campos.some((c) => c.startsWith('integrantes'))).toBe(true);
     expect(grupoRepository.crear).not.toHaveBeenCalled();
+  });
+
+  test('sin la lista de responsables, el responsable es quien crea el grupo', async () => {
+    grupoRepository.buscarUsuariosConRol.mockImplementation(async (ids) =>
+      [{ id: 1, rol: 'administrador', estado: 'activo' }, ...USUARIOS].filter((u) => ids.includes(u.id)),
+    );
+
+    const res = await crearGrupoComo('administrador', cuerpo({ responsables: undefined }));
+
+    expect(res.status).toBe(201);
+    expect(grupoRepository.crear).toHaveBeenCalledWith(
+      expect.objectContaining({ responsables: [1], creadoPor: 1 }),
+    );
   });
 
   test('sin responsables responde 400', async () => {
@@ -145,11 +160,13 @@ describe('POST /api/v1/grupos', () => {
     expect(res.body.error).toBe('RESPONSABLE_ROL_INVALIDO');
   });
 
-  test('con un usuario en las dos listas responde 400', async () => {
-    const res = await crearGrupoComo('administrador', cuerpo({ integrantes: [2] }));
+  test('con un usuario en las dos listas lo deja solo como responsable', async () => {
+    const res = await crearGrupoComo('administrador', cuerpo({ integrantes: [2, 3] }));
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('INTEGRANTE_DUPLICADO');
+    expect(res.status).toBe(201);
+    expect(grupoRepository.crear).toHaveBeenCalledWith(
+      expect.objectContaining({ responsables: [2], integrantes: [3] }),
+    );
   });
 
   test('con un nombre ya usado responde 409', async () => {
@@ -355,12 +372,14 @@ describe('PUT /api/v1/grupos/:id', () => {
     expect(grupoRepository.buscarPorId).not.toHaveBeenCalled();
   });
 
-  test('con un usuario dado de baja responde 400', async () => {
+  test('con un usuario dado de baja lo saca del grupo y guarda', async () => {
     const res = await editarComo('administrador', 1, cuerpo({ integrantes: [3, 4] }));
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('USUARIOS_DADOS_DE_BAJA');
-    expect(grupoRepository.actualizar).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(grupoRepository.actualizar).toHaveBeenCalledWith(
+      10,
+      expect.objectContaining({ responsables: [2], integrantes: [3] }),
+    );
   });
 
   test('un grupo inexistente responde 404', async () => {

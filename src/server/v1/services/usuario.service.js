@@ -3,6 +3,8 @@ const crypto = require('crypto');
 const AppError = require('../errors/AppError');
 const usuarioRepository = require('../repositories/usuario.repository');
 const authRepository = require('../repositories/auth.repository');
+const grupoRepository = require('../repositories/grupo.repository');
+const { ROLES_RESPONSABLE } = require('./grupo.service');
 const { enviarCodigoVerificacion, enviarEnlaceAccion } = require('./mail.service');
 
 const DURACION_CODIGO_MINUTOS = 15;
@@ -229,6 +231,20 @@ async function editarUsuarioPorAdmin(id, cambios, admin) {
     }
 
     datos.idRol = ids.id_rol;
+
+    // Un rol que no puede ser responsable (alumno) no se le puede dar a quien
+    // es responsable de algún grupo: el grupo quedaría con un responsable inválido.
+    if (!ROLES_RESPONSABLE.includes(rol)) {
+      const grupos = await grupoRepository.buscarGruposDondeEsResponsable(id);
+      if (grupos.length > 0) {
+        throw new AppError(
+          409,
+          `No se puede cambiar el rol: es responsable de ${listarNombres(grupos)}. Asigná otro responsable primero.`,
+          'RESPONSABLE_DE_GRUPOS',
+          { grupos },
+        );
+      }
+    }
   }
 
   try {
@@ -271,7 +287,28 @@ async function cambiarEstadoPorAdmin(id, estado, admin) {
     );
   }
 
-  return usuarioRepository.actualizarEstado(id, idEstado);
+  if (estado !== 'dado_de_baja') {
+    return usuarioRepository.actualizarEstado(id, idEstado);
+  }
+
+  // Un usuario dado de baja deja de estar en todos sus grupos, pero ningún
+  // grupo puede quedar sin responsable: si es el único de alguno, no se da de baja.
+  const resultado = await usuarioRepository.darDeBajaYQuitarDeGrupos(id, idEstado);
+  if (resultado.gruposSinOtroResponsable) {
+    const grupos = resultado.gruposSinOtroResponsable;
+    throw new AppError(
+      409,
+      `No se puede dar de baja: es el único responsable de ${listarNombres(grupos)}. Asigná otro responsable primero.`,
+      'UNICO_RESPONSABLE_DE_GRUPOS',
+      { grupos },
+    );
+  }
+
+  return resultado.usuario;
+}
+
+function listarNombres(grupos) {
+  return grupos.map((grupo) => grupo.nombre).join(', ');
 }
 
 // CU01 (flujo 3.a, RF4): el administrador restablece la contraseña de un

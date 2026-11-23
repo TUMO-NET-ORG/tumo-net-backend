@@ -41,6 +41,7 @@ app.use((req, res) => {
 app.use((error, req, res, next) => {
   if (error instanceof AppError) {
     return res.status(error.statusCode).json({
+      ...error.extra,
       error: error.code,
       mensaje: error.message,
     });

@@ -6,21 +6,18 @@ const AppError = require('../errors/AppError');
 const ROLES_RESPONSABLE = ['staff', 'tutor', 'administrador'];
 
 
+/*Si una persona viene en las dos listas, queda SOLO como responsable.
+ Así, para pasar a alguien de integrante a responsable no hace falta sacarlo antes de integrantes.*/
+function quitarResponsablesDeIntegrantes(responsables, integrantes) {
+  return integrantes.filter((id) => !responsables.includes(id));
+}
+
 
 // Reglas sobre quién está en el grupo. Las usan CREAR y EDITAR.
+// Devuelve las listas como tienen que guardarse.
 
-async function validarMiembros(responsables, integrantes) {
-  // Regla 1: una persona no puede estar en las dos listas a la vez
-  const enAmbas = responsables.filter((id) => integrantes.includes(id));
-  if (enAmbas.length > 0) {
-    throw new AppError(
-      400,
-      `Estos usuarios están como responsables y como integrantes: ${enAmbas.join(', ')}`,
-      'INTEGRANTE_DUPLICADO'
-    );
-  }
-
-  // Regla 2: todos los usuarios tienen que existir
+async function validarMiembros(responsables, integrantes, { quitarDadosDeBaja = false } = {}) {
+  // Regla 1: todos los usuarios tienen que existir
   const todosLosIds = [...responsables, ...integrantes];
   const usuarios = await grupoRepository.buscarUsuariosConRol(todosLosIds);
   const porId = new Map(usuarios.map((u) => [u.id, u])); // id -> { id, rol, estado }
@@ -34,17 +31,31 @@ async function validarMiembros(responsables, integrantes) {
     );
   }
 
-  // Regla 3: no se puede agregar a un grupo a un usuario dado de baja
-  const dadosDeBaja = todosLosIds.filter((id) => porId.get(id).estado === 'dado_de_baja');
+  /* Regla 2: un usuario dado de baja no puede estar en un grupo.
+   Al crear se rechaza. Al editar se lo saca sin dar error: el front manda el grupo completo
+   y puede traer a alguien que se dio de baja mientras el formulario estaba abierto.*/
+  const estaDadoDeBaja = (id) => porId.get(id).estado === 'dado_de_baja';
+  const dadosDeBaja = todosLosIds.filter(estaDadoDeBaja);
   if (dadosDeBaja.length > 0) {
-    throw new AppError(
-      400,
-      `Estos usuarios están dados de baja: ${dadosDeBaja.join(', ')}`,
-      'USUARIOS_DADOS_DE_BAJA'
-    );
+    if (!quitarDadosDeBaja) {
+      throw new AppError(
+        400,
+        `Estos usuarios están dados de baja: ${dadosDeBaja.join(', ')}`,
+        'USUARIOS_DADOS_DE_BAJA'
+      );
+    }
+    responsables = responsables.filter((id) => !estaDadoDeBaja(id));
+    integrantes = integrantes.filter((id) => !estaDadoDeBaja(id));
+    if (responsables.length === 0) {
+      throw new AppError(
+        400,
+        'El grupo necesita al menos un responsable que no esté dado de baja',
+        'GRUPO_SIN_RESPONSABLES'
+      );
+    }
   }
 
-  // Regla 4: los responsables tienen que ser staff, tutor o administrador
+  // Regla 3: los responsables tienen que ser staff, tutor o administrador
   const sinRolValido = responsables.filter(
     (id) => !ROLES_RESPONSABLE.includes(porId.get(id).rol)
   );
@@ -55,6 +66,8 @@ async function validarMiembros(responsables, integrantes) {
       'RESPONSABLE_ROL_INVALIDO'
     );
   }
+
+  return { responsables, integrantes };
 }
 
 /* Traduce el error de MySQL por nombre repetido a un 409. */
@@ -62,7 +75,7 @@ function traducirErrorNombreRepetido(err) {
   if (err.code === 'ER_DUP_ENTRY') {
     return new AppError(409, 'Ya existe un grupo con ese nombre', 'GRUPO_YA_EXISTE');
   }
-  return err; // cualquier otro error -> 500 en el manejador global
+  return err; // cualquier otro error 500 en el manejador global
 }
 
 /* Trae el grupo o tira 404. */
@@ -74,10 +87,8 @@ async function obtenerGrupoOFallar(grupoId) {
   return grupo;
 }
 
-/*
- Permiso para editar o borrar un grupo:
- un administrador puede con cualquier grupo; staff y tutor solo con los que son responsables.
- */
+/*Permiso para editar o borrar un grupo:
+ un administrador puede con cualquier grupo; staff y tutor solo con los que son responsables.*/
 async function verificarPuedeGestionar(grupoId, usuarioActual) {
   if (usuarioActual.rol === 'administrador') return;
   const esResponsable = await grupoRepository.esResponsable(grupoId, usuarioActual.id);
@@ -144,10 +155,21 @@ async function listarUsuariosDisponibles(buscar) {
   return grupoRepository.listarUsuariosDisponibles({ buscar });
 }
 
+
 // CREAR
 
-async function crearGrupo({ nombre, descripcion, responsables, integrantes }, creadoPorId) {
-  await validarMiembros(responsables, integrantes);
+async function crearGrupo(datos, creadoPorId) {
+  const { nombre, descripcion } = datos;
+
+  /* Si no mandan responsables, el responsable es quien crea el grupo.
+   Siempre es válido: la ruta ya exige rol administrador, staff o tutor.
+   Si los mandan, se respetan: quien crea puede no quedar como responsable.*/
+  
+  const responsablesPedidos = datos.responsables ?? [creadoPorId];
+  const { responsables, integrantes } = await validarMiembros(
+    responsablesPedidos,
+    quitarResponsablesDeIntegrantes(responsablesPedidos, datos.integrantes),
+  );
 
   let grupoId;
   try {
@@ -172,15 +194,21 @@ async function crearGrupo({ nombre, descripcion, responsables, integrantes }, cr
  * @param datos         el grupo completo como tiene que quedar
  * @param usuarioActual req.usuario (quién está haciendo el cambio)
  */
-async function editarGrupo(grupoId, { nombre, descripcion, responsables, integrantes }, usuarioActual) {
+async function editarGrupo(grupoId, datos, usuarioActual) {
+  const { nombre, descripcion } = datos;
+
   // 1. El grupo tiene que existir (y no estar dado de baja)
   await obtenerGrupoOFallar(grupoId);
 
   // 2. Permisos
   await verificarPuedeGestionar(grupoId, usuarioActual);
 
-  // 3. Mismas reglas que al crear
-  await validarMiembros(responsables, integrantes);
+  // 3. Mismas reglas que al crear, salvo que los dados de baja se sacan en vez de dar error
+  const { responsables, integrantes } = await validarMiembros(
+    datos.responsables,
+    quitarResponsablesDeIntegrantes(datos.responsables, datos.integrantes),
+    { quitarDadosDeBaja: true },
+  );
 
   // 4. Guardar
   let resultado;
@@ -207,6 +235,8 @@ async function editarGrupo(grupoId, { nombre, descripcion, responsables, integra
   return { id: grupoId, nombre, descripcion: descripcion ?? null, responsables, integrantes };
 }
 
+ 
+
 // BORRAR 
 
 async function borrarGrupo(grupoId, usuarioActual) {
@@ -221,6 +251,7 @@ async function borrarGrupo(grupoId, usuarioActual) {
 }
 
 module.exports = {
+  ROLES_RESPONSABLE,
   listarGrupos,
   obtenerGrupo,
   listarUsuariosDisponibles,
