@@ -232,6 +232,16 @@ async function buscarIdEstadoPorCodigo(codigo) {
   return filas[0] ? filas[0].id : null;
 }
 
+async function listarCatalogosUsuario() {
+  const [roles] = await pool.execute(
+    'SELECT id, codigo, nombre FROM roles ORDER BY nombre',
+  );
+  const [estados] = await pool.execute(
+    'SELECT id, codigo, nombre FROM estado_usuario ORDER BY nombre',
+  );
+  return { roles, estados };
+}
+
 // CU01 (flujo 3.b): cambio de estado. La baja es lógica: el registro no se borra.
 async function actualizarEstado(id, idEstado) {
   await pool.execute('UPDATE usuarios SET id_estado = ? WHERE id = ?', [
@@ -323,6 +333,7 @@ module.exports = {
   actualizarEstado,
   darDeBajaYQuitarDeGrupos,
   buscarIdEstadoPorCodigo,
+  listarCatalogosUsuario,
   listar,
   buscarIdsPorCodigo,
   buscarPorId,

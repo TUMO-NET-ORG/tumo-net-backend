@@ -14,6 +14,7 @@ const {
   editarUsuarioPorAdmin,
   obtenerUsuarioPorAdmin,
   listarUsuarios,
+  listarCatalogosUsuario,
   solicitarCambioEmailPorAdmin,
   cambiarEstadoPorAdmin,
   restablecerPasswordPorAdmin,
@@ -124,6 +125,11 @@ async function listarUsuariosAdmin(req, res) {
   return res.status(200).json(resultado);
 }
 
+async function listarCatalogosAdmin(req, res) {
+  const catalogos = await listarCatalogosUsuario();
+  return res.status(200).json(catalogos);
+}
+
 // CU01 (flujo 3.b): cambio de estado por el administrador.
 async function cambiarEstadoAdmin(req, res) {
   const validacionId = idUsuarioSchema.validate(req.params.id);
@@ -175,4 +181,5 @@ module.exports = {
   editarUsuarioAdmin,
   solicitarCambioEmailAdmin,
   listarUsuariosAdmin,
+  listarCatalogosAdmin,
 };

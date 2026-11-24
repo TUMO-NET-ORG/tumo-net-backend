@@ -271,6 +271,14 @@ async function cambiarEstadoPorAdmin(id, estado, admin) {
     );
   }
 
+  if (estado === 'pendiente_verificacion') {
+    throw new AppError(
+      400,
+      'El estado pendiente de verificación no se puede asignar manualmente',
+      'ESTADO_NO_ADMINISTRABLE',
+    );
+  }
+
   const usuario = await usuarioRepository.buscarPorId(id);
 
   if (!usuario) {
@@ -281,9 +289,9 @@ async function cambiarEstadoPorAdmin(id, estado, admin) {
 
   if (idEstado === null) {
     throw new AppError(
-      500,
-      'La configuración inicial de roles y estados está incompleta',
-      'CONFIGURACION_USUARIO_INCOMPLETA',
+      400,
+      'El estado indicado no existe',
+      'ESTADO_INVALIDO',
     );
   }
 
@@ -360,6 +368,10 @@ async function listarUsuarios({ busqueda, rol, estado, pagina, tamanioPagina }) 
   };
 }
 
+async function listarCatalogosUsuario() {
+  return usuarioRepository.listarCatalogosUsuario();
+}
+
 // Genera un código nuevo para un usuario que quedó pendiente de verificación
 // (por ejemplo, si el mail del registro no llegó o el código venció).
 // Responde igual exista o no la cuenta, para no revelar emails registrados.
@@ -400,6 +412,7 @@ module.exports = {
   obtenerUsuarioPorAdmin,
   generarPasswordTemporal,
   listarUsuarios,
+  listarCatalogosUsuario,
   solicitarCambioEmailPorAdmin,
   reenviarCodigoVerificacion,
   restablecerPasswordPorAdmin,
