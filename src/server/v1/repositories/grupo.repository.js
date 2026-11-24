@@ -246,7 +246,58 @@ async function darDeBaja(grupoId) {
   return resultado.affectedRows > 0;
 }
 
+/* Grupos activos donde el usuario es responsable: [{ id, nombre }]. */
+async function buscarGruposDondeEsResponsable(usuarioId) {
+  const [filas] = await pool.execute(
+    `SELECT g.id, g.nombre
+       FROM grupos g
+       JOIN grupo_integrantes gi ON gi.grupo_id = g.id
+      WHERE gi.usuario_id = ? AND gi.es_responsable = 1 AND g.activo = 1
+      ORDER BY g.nombre, g.id`,
+    [usuarioId]
+  );
+  return filas;
+}
 
+/* Grupos activos donde el usuario es el ÚNICO responsable: [{ id, nombre }].
+ Va dentro de la transacción de la baja (recibe la conexión) y bloquea esos grupos,
+ en el mismo orden que actualizar(): primero la fila del grupo. Así, si dan de baja
+ al mismo tiempo a los dos responsables de un grupo, el segundo espera, ve que ya no
+ queda otro y se rechaza. */
+async function bloquearGruposDondeEsUnicoResponsable(conexion, usuarioId) {
+  const [propios] = await conexion.execute(
+    `SELECT grupo_id FROM grupo_integrantes WHERE usuario_id = ? AND es_responsable = 1`,
+    [usuarioId]
+  );
+  if (propios.length === 0) return [];
+  const idsGrupos = propios.map((fila) => fila.grupo_id);
+
+  const [grupos] = await conexion.query(
+    `SELECT id, nombre FROM grupos WHERE id IN (?) AND activo = 1 ORDER BY id FOR UPDATE`,
+    [idsGrupos]
+  );
+  if (grupos.length === 0) return [];
+
+  // Lectura con bloqueo: ve lo último confirmado por otras transacciones
+  const [otros] = await conexion.query(
+    `SELECT grupo_id FROM grupo_integrantes
+      WHERE grupo_id IN (?) AND es_responsable = 1 AND usuario_id <> ?
+      FOR UPDATE`,
+    [grupos.map((g) => g.id), usuarioId]
+  );
+  const conOtroResponsable = new Set(otros.map((fila) => fila.grupo_id));
+  return grupos.filter((g) => !conOtroResponsable.has(g.id));
+}
+
+/* Saca a un usuario de todos los grupos donde está (como responsable o integrante).
+ Se usa cuando el usuario se da de baja, dentro de su transacción. */
+async function quitarUsuarioDeTodosLosGrupos(conexion, usuarioId) {
+  const [resultado] = await conexion.execute(
+    `DELETE FROM grupo_integrantes WHERE usuario_id = ?`,
+    [usuarioId]
+  );
+  return resultado.affectedRows;
+}
 
 module.exports = {
   buscarUsuariosConRol,
@@ -259,4 +310,7 @@ module.exports = {
   crear,
   actualizar,
   darDeBaja,
+  buscarGruposDondeEsResponsable,
+  bloquearGruposDondeEsUnicoResponsable,
+  quitarUsuarioDeTodosLosGrupos,
 };

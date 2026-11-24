@@ -3569,6 +3569,72 @@
 					]
 				},
 				{
+					"name": "crear grupo - sin responsables, queda quien lo crea (201)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/grupos",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"grupos"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre_aux}}\",\n  \"integrantes\": [{{grupo_integrante_id}}]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Los responsables son opcionales al crear: si no se mandan, el responsable es el usuario que crea el grupo (acá, el administrador logueado). Si se mandan, se respetan (ver \"crear grupo (201)\"). Ejecutar en orden, después de \"auth / login administrador\" y de los requests \"preparar\" de esta carpeta."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set('grupo_nombre_aux', `Grupo prueba ${Date.now()}`);"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 201', function () { pm.response.to.have.status(201); });",
+									"const grupo = pm.response.json().grupo;",
+									"pm.test('el responsable es quien creó el grupo', function () {",
+									"  pm.expect(grupo.responsables).to.eql([Number(pm.collectionVariables.get('admin_id'))]);",
+									"});",
+									"pm.test('los integrantes se guardan igual', function () {",
+									"  pm.expect(grupo.integrantes).to.eql([Number(pm.collectionVariables.get('grupo_integrante_id'))]);",
+									"});"
+								]
+							}
+						}
+					]
+				},
+				{
 					"name": "crear grupo - nombre duplicado (409)",
 					"request": {
 						"method": "POST",
@@ -3808,7 +3874,7 @@
 					]
 				},
 				{
-					"name": "crear grupo - misma persona en ambas listas (400)",
+					"name": "crear grupo - misma persona en ambas listas (201)",
 					"request": {
 						"method": "POST",
 						"header": [],
@@ -3825,7 +3891,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"nombre\": \"{{grupo_nombre_aux}}\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [{{grupo_responsable_id}}]\n}",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre_aux}}\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [{{grupo_responsable_id}}, {{grupo_integrante_id}}]\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -3842,7 +3908,7 @@
 								}
 							]
 						},
-						"description": "Una persona no puede ser responsable e integrante a la vez. Ejecutar en orden, después de \"auth / login administrador\" y de los requests \"preparar\" de esta carpeta."
+						"description": "Si una persona viene como responsable y como integrante, queda solo como responsable (se la saca de integrantes). Así se puede pasar a alguien de integrante a responsable sin sacarlo antes de integrantes. Ejecutar en orden, después de \"auth / login administrador\" y de los requests \"preparar\" de esta carpeta."
 					},
 					"response": [],
 					"event": [
@@ -3860,9 +3926,15 @@
 							"script": {
 								"type": "text/javascript",
 								"exec": [
-									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
-									"pm.test('informa el usuario repetido', function () {",
-									"  pm.expect(pm.response.json().error).to.eql('INTEGRANTE_DUPLICADO');",
+									"pm.test('responde con 201', function () { pm.response.to.have.status(201); });",
+									"const grupo = pm.response.json().grupo;",
+									"const responsableId = Number(pm.collectionVariables.get('grupo_responsable_id'));",
+									"pm.test('la persona queda solo como responsable', function () {",
+									"  pm.expect(grupo.responsables).to.eql([responsableId]);",
+									"  pm.expect(grupo.integrantes).to.not.include(responsableId);",
+									"});",
+									"pm.test('el resto de los integrantes se mantiene', function () {",
+									"  pm.expect(grupo.integrantes).to.eql([Number(pm.collectionVariables.get('grupo_integrante_id'))]);",
 									"});"
 								]
 							}
@@ -3904,7 +3976,7 @@
 								}
 							]
 						},
-						"description": "Nombre demasiado corto y sin responsables."
+						"description": "Nombre demasiado corto y lista de responsables vacía. Omitir \"responsables\" es válido (queda quien crea el grupo), pero mandar [] no."
 					},
 					"response": [],
 					"event": [
@@ -4604,7 +4676,7 @@
 					]
 				},
 				{
-					"name": "editar grupo - usuario dado de baja (400)",
+					"name": "editar grupo - usuario dado de baja se quita (200)",
 					"request": {
 						"method": "PUT",
 						"header": [],
@@ -4622,7 +4694,7 @@
 						},
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"nombre\": \"{{grupo_nombre}}\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [{{grupo_baja_id}}]\n}",
+							"raw": "{\n  \"nombre\": \"{{grupo_nombre}}\",\n  \"descripcion\": \"Turno tarde\",\n  \"responsables\": [{{grupo_responsable_id}}],\n  \"integrantes\": [{{grupo_integrante_id}}, {{grupo_baja_id}}]\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -4639,7 +4711,7 @@
 								}
 							]
 						},
-						"description": "Al editar se aplican las mismas reglas que al crear. Ejecutar después de \"crear grupo (201)\"."
+						"description": "Al editar, a diferencia de crear, un usuario dado de baja no da error: se lo saca del grupo y se guarda el resto (el front manda el grupo completo y alguien pudo darse de baja con el formulario abierto). Ejecutar después de \"crear grupo (201)\" y de los requests \"preparar\" de esta carpeta."
 					},
 					"response": [],
 					"event": [
@@ -4648,9 +4720,13 @@
 							"script": {
 								"type": "text/javascript",
 								"exec": [
-									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
-									"pm.test('informa los usuarios dados de baja', function () {",
-									"  pm.expect(pm.response.json().error).to.eql('USUARIOS_DADOS_DE_BAJA');",
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const grupo = pm.response.json().grupo;",
+									"pm.test('el usuario dado de baja no queda en el grupo', function () {",
+									"  pm.expect(grupo.integrantes).to.not.include(Number(pm.collectionVariables.get('grupo_baja_id')));",
+									"});",
+									"pm.test('el resto de los integrantes se guarda', function () {",
+									"  pm.expect(grupo.integrantes).to.eql([Number(pm.collectionVariables.get('grupo_integrante_id'))]);",
 									"});"
 								]
 							}

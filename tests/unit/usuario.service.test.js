@@ -1,9 +1,11 @@
 jest.mock('../../src/server/v1/repositories/usuario.repository');
 jest.mock('../../src/server/v1/repositories/auth.repository');
+jest.mock('../../src/server/v1/repositories/grupo.repository');
 jest.mock('../../src/server/v1/services/mail.service');
 
 const argon2 = require('argon2');
 const usuarioRepository = require('../../src/server/v1/repositories/usuario.repository');
+const grupoRepository = require('../../src/server/v1/repositories/grupo.repository');
 const mailService = require('../../src/server/v1/services/mail.service');
 const {
   cambiarEstadoPorAdmin,
@@ -147,6 +149,8 @@ describe('editarUsuarioPorAdmin (CU01 – edición por el administrador, RF1)', 
   });
 
   test('traduce el rol a su id para cambiar un dato que el alumno no puede editar', async () => {
+    grupoRepository.buscarGruposDondeEsResponsable.mockResolvedValue([]);
+
     await editarUsuarioPorAdmin(15, { rol: 'alumno', email: 'otra@tumo.world' }, admin);
 
     expect(usuarioRepository.buscarIdsPorCodigo).toHaveBeenCalledWith('alumno', 'activo');
@@ -155,6 +159,29 @@ describe('editarUsuarioPorAdmin (CU01 – edición por el administrador, RF1)', 
       idRol: 2,
     });
   });
+
+  test('no deja pasar a alumno a quien es responsable de algún grupo', async () => {
+    const grupos = [{ id: 7, nombre: 'Robótica' }];
+    grupoRepository.buscarGruposDondeEsResponsable.mockResolvedValue(grupos);
+
+    await expect(editarUsuarioPorAdmin(15, { rol: 'alumno' }, admin)).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'RESPONSABLE_DE_GRUPOS',
+      extra: { grupos },
+    });
+    expect(grupoRepository.buscarGruposDondeEsResponsable).toHaveBeenCalledWith(15);
+    expect(usuarioRepository.actualizar).not.toHaveBeenCalled();
+  });
+
+  test.each(['staff', 'tutor', 'administrador'])(
+    'pasar a %s no mira los grupos: sigue pudiendo ser responsable',
+    async (rol) => {
+      await editarUsuarioPorAdmin(15, { rol }, admin);
+
+      expect(grupoRepository.buscarGruposDondeEsResponsable).not.toHaveBeenCalled();
+      expect(usuarioRepository.actualizar).toHaveBeenCalled();
+    },
+  );
 
   test('si el usuario no existe responde 404 y no actualiza', async () => {
     usuarioRepository.buscarPorId.mockResolvedValue(undefined);
@@ -261,7 +288,7 @@ describe('cambiarEstadoPorAdmin (CU01 – flujo 3.b, RF2)', () => {
     usuarioRepository.buscarIdEstadoPorCodigo.mockResolvedValue(3);
   });
 
-  test.each(['activo', 'inactivo', 'suspendido', 'dado_de_baja'])(
+  test.each(['activo', 'inactivo', 'suspendido'])(
     'cambia el estado a %s con un UPDATE y devuelve el usuario',
     async (estado) => {
       usuarioRepository.actualizarEstado.mockResolvedValue(usuarioCreado({ estado }));
@@ -271,6 +298,43 @@ describe('cambiarEstadoPorAdmin (CU01 – flujo 3.b, RF2)', () => {
       expect(usuarioRepository.buscarIdEstadoPorCodigo).toHaveBeenCalledWith(estado);
       expect(usuarioRepository.actualizarEstado).toHaveBeenCalledWith(15, 3);
       expect(usuario.estado).toBe(estado);
+    },
+  );
+
+  test('al dar de baja usa la transacción que también lo saca de sus grupos', async () => {
+    usuarioRepository.darDeBajaYQuitarDeGrupos.mockResolvedValue({
+      usuario: usuarioCreado({ estado: 'dado_de_baja' }),
+    });
+
+    const usuario = await cambiarEstadoPorAdmin(15, 'dado_de_baja', admin);
+
+    expect(usuarioRepository.darDeBajaYQuitarDeGrupos).toHaveBeenCalledWith(15, 3);
+    expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
+    expect(usuario.estado).toBe('dado_de_baja');
+  });
+
+  test('si es el único responsable de algún grupo responde 409 con esos grupos', async () => {
+    const grupos = [{ id: 7, nombre: 'Robótica' }, { id: 9, nombre: 'Diseño 3D' }];
+    usuarioRepository.darDeBajaYQuitarDeGrupos.mockResolvedValue({
+      gruposSinOtroResponsable: grupos,
+    });
+
+    await expect(cambiarEstadoPorAdmin(15, 'dado_de_baja', admin)).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'UNICO_RESPONSABLE_DE_GRUPOS',
+      message: expect.stringContaining('Robótica, Diseño 3D'),
+      extra: { grupos },
+    });
+  });
+
+  test.each(['activo', 'inactivo', 'suspendido'])(
+    'al pasar a %s no lo saca de sus grupos',
+    async (estado) => {
+      usuarioRepository.actualizarEstado.mockResolvedValue(usuarioCreado({ estado }));
+
+      await cambiarEstadoPorAdmin(15, estado, admin);
+
+      expect(usuarioRepository.darDeBajaYQuitarDeGrupos).not.toHaveBeenCalled();
     },
   );
 

@@ -1,4 +1,5 @@
 const pool = require('../../../config/db');
+const grupoRepository = require('./grupo.repository');
 
 // Datos del usuario que se pueden devolver al cliente (sin hash ni contadores).
 const COLUMNAS_PUBLICAS = `
@@ -241,6 +242,41 @@ async function actualizarEstado(id, idEstado) {
   return buscarPublicoPorId(pool, id);
 }
 
+/* Baja de un usuario: en una sola transacción, cambia el estado y lo saca de todos sus grupos.
+ Si es el único responsable de algún grupo activo no hace nada y devuelve esos grupos,
+ para que ningún grupo quede sin responsable.
+ Devuelve { usuario } si se dio de baja, o { gruposSinOtroResponsable } si no. */
+async function darDeBajaYQuitarDeGrupos(id, idEstado) {
+  const conexion = await pool.getConnection();
+
+  try {
+    await conexion.beginTransaction();
+
+    const gruposSinOtroResponsable =
+      await grupoRepository.bloquearGruposDondeEsUnicoResponsable(conexion, id);
+    if (gruposSinOtroResponsable.length > 0) {
+      await conexion.rollback();
+      return { gruposSinOtroResponsable };
+    }
+
+    await conexion.execute('UPDATE usuarios SET id_estado = ? WHERE id = ?', [
+      idEstado,
+      id,
+    ]);
+    await grupoRepository.quitarUsuarioDeTodosLosGrupos(conexion, id);
+
+    const usuario = await buscarPublicoPorId(conexion, id);
+
+    await conexion.commit();
+    return { usuario };
+  } catch (error) {
+    await conexion.rollback();
+    throw error;
+  } finally {
+    conexion.release();
+  }
+}
+
 // CU01 (flujo 3.a, RF4): reemplaza la contraseña por una temporal. Invalida
 // las sesiones abiertas (password_version), obliga a cambiarla en el próximo
 // ingreso, desbloquea la cuenta e invalida los enlaces de recuperación
@@ -285,6 +321,7 @@ module.exports = {
   actualizar,
   restablecerPasswordTemporal,
   actualizarEstado,
+  darDeBajaYQuitarDeGrupos,
   buscarIdEstadoPorCodigo,
   listar,
   buscarIdsPorCodigo,

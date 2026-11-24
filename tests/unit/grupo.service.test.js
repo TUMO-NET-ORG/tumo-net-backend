@@ -65,10 +65,18 @@ describe('crearGrupo', () => {
     expect(grupo.descripcion).toBeNull();
   });
 
-  test('rechaza un usuario que es responsable e integrante a la vez', async () => {
-    await expect(
-      crearGrupo(datosGrupo({ responsables: [2], integrantes: [2, 3] }), 1),
-    ).rejects.toMatchObject({ statusCode: 400, code: 'INTEGRANTE_DUPLICADO' });
+  test('si una persona viene en las dos listas, queda solo como responsable', async () => {
+    const grupo = await crearGrupo(datosGrupo({ responsables: [2], integrantes: [2, 3] }), 1);
+
+    expect(grupo).toMatchObject({ responsables: [2], integrantes: [3] });
+    expect(grupoRepository.crear).toHaveBeenCalledWith(
+      expect.objectContaining({ responsables: [2], integrantes: [3] }),
+    );
+  });
+
+  test('si no mandan responsables, el responsable es quien crea el grupo', async () => {
+    const grupo = await crearGrupo(datosGrupo({ responsables: undefined }), 1);
+    expect(grupo.responsables).toEqual([1]);
   });
 
   test('rechaza usuarios inexistentes', async () => {
@@ -274,16 +282,44 @@ describe('editarGrupo', () => {
   });
 
   test.each([
-    ['un usuario dado de baja', { integrantes: [3, 4] }, 'USUARIOS_DADOS_DE_BAJA'],
     ['un usuario inexistente', { integrantes: [99] }, 'USUARIOS_INEXISTENTES'],
     ['un alumno como responsable', { responsables: [3], integrantes: [] }, 'RESPONSABLE_ROL_INVALIDO'],
-    ['una persona en las dos listas', { integrantes: [2] }, 'INTEGRANTE_DUPLICADO'],
   ])('aplica las mismas reglas que al crear: rechaza %s', async (_caso, cambios, codigo) => {
     await expect(editarGrupo(10, datosGrupo(cambios), ADMIN)).rejects.toMatchObject({
       statusCode: 400,
       code: codigo,
     });
     expect(grupoRepository.actualizar).not.toHaveBeenCalled();
+  });
+
+  test('saca a los dados de baja sin dar error', async () => {
+    const grupo = await editarGrupo(
+      10,
+      datosGrupo({ responsables: [2, 5], integrantes: [3, 4] }),
+      ADMIN,
+    );
+
+    expect(grupoRepository.actualizar).toHaveBeenCalledWith(
+      10,
+      expect.objectContaining({ responsables: [2], integrantes: [3] }),
+    );
+    expect(grupo).toMatchObject({ responsables: [2], integrantes: [3] });
+  });
+
+  test('si todos los responsables están dados de baja responde 400', async () => {
+    await expect(
+      editarGrupo(10, datosGrupo({ responsables: [5] }), ADMIN),
+    ).rejects.toMatchObject({ statusCode: 400, code: 'GRUPO_SIN_RESPONSABLES' });
+    expect(grupoRepository.actualizar).not.toHaveBeenCalled();
+  });
+
+  test('si una persona viene en las dos listas, queda solo como responsable', async () => {
+    await editarGrupo(10, datosGrupo({ integrantes: [2, 3] }), ADMIN);
+
+    expect(grupoRepository.actualizar).toHaveBeenCalledWith(
+      10,
+      expect.objectContaining({ responsables: [2], integrantes: [3] }),
+    );
   });
 
   test('responde 409 si el nuevo nombre ya lo usa otro grupo', async () => {
