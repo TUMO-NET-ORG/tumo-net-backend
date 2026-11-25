@@ -20,7 +20,7 @@ function usuarioBase(cambios = {}) {
     id: 7,
     nombre: 'Ana',
     apellido: 'Pérez',
-    documento: '12345678',
+    documento: '12345672',
     email: 'ana@tumo.world',
     passwordHash,
     passwordVersion: 0,

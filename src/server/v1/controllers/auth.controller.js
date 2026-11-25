@@ -4,6 +4,8 @@ const {
   solicitarRecuperacionSchema,
   restablecerPasswordSchema,
   reenviarVerificacionSchema,
+  cambiarPasswordSchema,
+  tokenInfoSchema,
 } = require('../validators/auth.validator');
 const {
   iniciarSesion,
@@ -11,6 +13,9 @@ const {
   solicitarRecuperacion: solicitarRecuperacionService,
   restablecerPassword: restablecerPasswordService,
   perfilPublico,
+  cambiarPassword: cambiarPasswordService,
+  obtenerTipoTokenPassword,
+  confirmarCambioEmail,
 } = require('../services/auth.service');
 const { reenviarCodigoVerificacion } = require('../services/usuario.service');
 
@@ -89,11 +94,31 @@ async function restablecerPassword(req, res) {
   await restablecerPasswordService(
     validacion.value.token,
     validacion.value.nuevaPassword,
+    validacion.value.aceptaTerminos,
+    validacion.value.versionTerminos,
   );
 
   return res.status(200).json({
     mensaje: 'Contraseña actualizada correctamente',
   });
+}
+
+async function informarTokenPassword(req, res) {
+  const validacion = tokenInfoSchema.validate(req.query, { abortEarly: false });
+  if (validacion.error) {
+    return responderDatosInvalidos(res, validacion.error);
+  }
+  const resultado = await obtenerTipoTokenPassword(validacion.value.token);
+  return res.status(200).json(resultado);
+}
+
+async function confirmarCambioEmailController(req, res) {
+  const validacion = tokenInfoSchema.validate(req.body, { abortEarly: false });
+  if (validacion.error) {
+    return responderDatosInvalidos(res, validacion.error);
+  }
+  await confirmarCambioEmail(validacion.value.token);
+  return res.status(200).json({ mensaje: 'Email actualizado correctamente' });
 }
 
 async function reenviarVerificacion(req, res) {
@@ -113,6 +138,27 @@ async function reenviarVerificacion(req, res) {
   });
 }
 
+async function cambiarPassword(req, res) {
+  const validacion = cambiarPasswordSchema.validate(req.body, {
+    abortEarly: false,
+  });
+
+  if (validacion.error) {
+    return responderDatosInvalidos(res, validacion.error);
+  }
+
+  const resultado = await cambiarPasswordService(
+    req.usuario,
+    validacion.value.passwordActual,
+    validacion.value.nuevaPassword,
+  );
+
+  return res.status(200).json({
+    mensaje: 'Contraseña actualizada correctamente',
+    token: resultado.token,
+  });
+}
+
 function obtenerSesion(req, res) {
   return res.status(200).json({ usuario: perfilPublico(req.usuario) });
 }
@@ -125,6 +171,7 @@ function logout(req, res) {
 }
 
 module.exports = {
+  cambiarPassword,
   login,
   logout,
   obtenerSesion,
@@ -132,4 +179,6 @@ module.exports = {
   verificarEmail,
   solicitarRecuperacion,
   restablecerPassword,
+  informarTokenPassword,
+  confirmarCambioEmailController,
 };

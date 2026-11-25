@@ -28,12 +28,25 @@ const reenviarVerificacionSchema = Joi.object({
 const restablecerPasswordSchema = Joi.object({
   token: Joi.string().trim().min(32).max(256).required(),
   nuevaPassword: passwordSchema.required(),
+  aceptaTerminos: Joi.boolean().default(false),
+  versionTerminos: Joi.string().trim().min(1).max(20).default('1.0'),
+});
+
+const tokenInfoSchema = Joi.object({
+  token: Joi.string().trim().min(32).max(256).required(),
+});
+
+const cambiarPasswordSchema = Joi.object({
+  passwordActual: Joi.string().min(1).max(128).required(),
+  nuevaPassword: passwordSchema.required(),
 });
 
 module.exports = {
+  cambiarPasswordSchema,
   loginSchema,
   verificarEmailSchema,
   solicitarRecuperacionSchema,
   reenviarVerificacionSchema,
   restablecerPasswordSchema,
+  tokenInfoSchema,
 };

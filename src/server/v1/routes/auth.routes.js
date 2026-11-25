@@ -1,6 +1,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const {
+  cambiarPassword,
   login,
   logout,
   obtenerSesion,
@@ -8,8 +9,12 @@ const {
   reenviarVerificacion,
   solicitarRecuperacion,
   restablecerPassword,
+  informarTokenPassword,
+  confirmarCambioEmailController,
 } = require('../controllers/auth.controller');
-const { autenticar } = require('../middleware/auth.middleware');
+const {
+  autenticarPermitiendoCambioPendiente,
+} = require('../middleware/auth.middleware');
 
 const router = express.Router();
 
@@ -41,17 +46,29 @@ const reenvioLimiter = crearLimitador(
   5,
   'Demasiadas solicitudes. Intentá nuevamente más tarde.',
 );
+const cambioPasswordLimiter = crearLimitador(
+  10,
+  'Demasiados intentos. Intentá nuevamente más tarde.',
+);
 const verificacionLimiter = crearLimitador(
   10,
   'Demasiados intentos. Intentá nuevamente más tarde.',
 );
 
 router.post('/login', loginLimiter, login);
-router.post('/logout', autenticar, logout);
-router.get('/me', autenticar, obtenerSesion);
+router.post('/logout', autenticarPermitiendoCambioPendiente, logout);
+router.get('/me', autenticarPermitiendoCambioPendiente, obtenerSesion);
+router.post(
+  '/change-password',
+  cambioPasswordLimiter,
+  autenticarPermitiendoCambioPendiente,
+  cambiarPassword,
+);
 router.post('/verify-email', verificacionLimiter, verificarEmail);
 router.post('/resend-verification', reenvioLimiter, reenviarVerificacion);
 router.post('/forgot-password', recoveryRequestLimiter, solicitarRecuperacion);
 router.post('/reset-password', recoveryResetLimiter, restablecerPassword);
+router.get('/password-token-info', informarTokenPassword);
+router.post('/confirm-email-change', confirmarCambioEmailController);
 
 module.exports = router;
