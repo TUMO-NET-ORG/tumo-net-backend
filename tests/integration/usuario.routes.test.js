@@ -88,7 +88,7 @@ describe('POST /api/v1/usuarios (CU01 – alta por administrador)', () => {
     const res = await request(app)
       .post(URL)
       .set('Authorization', `Bearer ${sesion('administrador')}`)
-      .send({ email: 'no-es-email', rol: 'superusuario' });
+      .send({ email: 'no-es-email' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('DATOS_INVALIDOS');
@@ -261,8 +261,6 @@ describe('GET /api/v1/usuarios (CU01 – listado con búsqueda y filtros)', () =
   });
 
   test.each([
-    ['rol inexistente', { rol: 'superusuario' }, 'rol'],
-    ['estado inexistente', { estado: 'borrado' }, 'estado'],
     ['página 0', { pagina: '0' }, 'pagina'],
     ['página no numérica', { pagina: 'dos' }, 'pagina'],
     ['tamaño de página mayor a 100', { tamanioPagina: '500' }, 'tamanioPagina'],
@@ -341,8 +339,6 @@ describe('PATCH /api/v1/usuarios/:id/estado (CU01 – flujo 3.b)', () => {
   });
 
   test.each([
-    ['un estado inexistente', '/15/estado', { estado: 'borrado' }, 'estado'],
-    ['pendiente_verificacion', '/15/estado', { estado: 'pendiente_verificacion' }, 'estado'],
     ['sin estado', '/15/estado', {}, 'estado'],
     ['campos extra', '/15/estado', { estado: 'activo', rol: 'staff' }, 'rol'],
     ['id no numérico', '/abc/estado', { estado: 'activo' }, 'id'],

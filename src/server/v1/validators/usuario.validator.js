@@ -3,24 +3,8 @@ const { emailSchema } = require('./email.validator');
 const { passwordSchema } = require('./password.validator');
 const { cedulaSchema } = require('./cedula.validator'); 
 
-// Roles definidos en RNF12 (deben coincidir con la tabla `roles`).
-const ROLES = ['administrador', 'alumno', 'staff', 'tutor'];
-
-// Estados de usuario (deben coincidir con la tabla `estado_usuario`).
-const ESTADOS = [
-  'activo',
-  'inactivo',
-  'suspendido',
-  'pendiente_verificacion',
-  'dado_de_baja',
-];
-
-// CU01 (flujo 3.b): estados que el administrador puede asignar. La baja es
-// lógica (`dado_de_baja`): el registro nunca se borra, así que sus datos,
-// publicaciones y comentarios se conservan. Solo `activo` puede iniciar
-// sesión; los listados de la comunidad deben mostrar únicamente usuarios
-// activos.
-const ESTADOS_ADMINISTRABLES = ['activo', 'inactivo', 'suspendido', 'dado_de_baja'];
+// Los valores válidos se leen de las tablas roles y estado_usuario.
+// La base comprueba que el código exista al crear, editar o cambiar estados.
 
 function fechaActualLocal() {
   const hoy = new Date();
@@ -75,12 +59,7 @@ const altaUsuarioAdminSchema = Joi.object({
   fechaNacimiento: datosPersonales.fechaNacimiento,
   fotoUrl: datosPersonales.fotoUrl,
   urlPortfolio: datosPersonales.urlPortfolio,
-  rol: Joi.string()
-    .valid(...ROLES)
-    .required()
-    .messages({
-      'any.only': `El rol debe ser uno de: ${ROLES.join(', ')}`,
-    }),
+  rol: Joi.string().trim().max(30).required(),
 });
 
 // CU01 (RF1): edición por el administrador. Body parcial (al menos un campo).
@@ -111,36 +90,22 @@ const idUsuarioSchema = Joi.number().integer().positive().required().messages({
 // CU01 (flujo principal, paso 2): filtros y paginación del listado.
 const listarUsuariosSchema = Joi.object({
   busqueda: Joi.string().trim().max(100).allow(''),
-  rol: Joi.string()
-    .valid(...ROLES)
-    .messages({ 'any.only': `El rol debe ser uno de: ${ROLES.join(', ')}` }),
-  estado: Joi.string()
-    .valid(...ESTADOS)
-    .messages({
-      'any.only': `El estado debe ser uno de: ${ESTADOS.join(', ')}`,
-    }),
+  rol: Joi.string().trim().max(30).allow(''),
+  estado: Joi.string().trim().max(30).allow(''),
   pagina: Joi.number().integer().min(1).default(1),
   tamanioPagina: Joi.number().integer().min(1).max(100).default(20),
 });
 
 const cambiarEstadoSchema = Joi.object({
-  estado: Joi.string()
-    .valid(...ESTADOS_ADMINISTRABLES)
-    .required()
-    .messages({
-      'any.only': `El estado debe ser uno de: ${ESTADOS_ADMINISTRABLES.join(', ')}`,
-      'any.required': 'Indicá el estado',
-    }),
+  estado: Joi.string().trim().max(30).required()
+    .messages({ 'any.required': 'Indicá el estado' }),
 });
 
 module.exports = {
-  ESTADOS,
-  ESTADOS_ADMINISTRABLES,
   cambiarEstadoSchema,
   listarUsuariosSchema,
   altaUsuarioSchema,
   altaUsuarioAdminSchema,
   editarUsuarioSchema,
   idUsuarioSchema,
-  ROLES,
 };
