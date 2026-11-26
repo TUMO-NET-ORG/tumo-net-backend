@@ -61,7 +61,7 @@ describe('POST /api/v1/usuarios (CU01 – alta por administrador)', () => {
     expect(usuarioRepository.crearPendientePorAdmin).not.toHaveBeenCalled();
   });
 
-  test.each(['alumno', 'staff', 'tutor'])('con rol %s responde 403 (RNF12)', async (rol) => {
+  test.each(['alumno'])('con rol %s responde 403 (RNF12)', async (rol) => {
     const res = await request(app)
       .post(URL)
       .set('Authorization', `Bearer ${sesion(rol)}`)
@@ -69,6 +69,34 @@ describe('POST /api/v1/usuarios (CU01 – alta por administrador)', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('SIN_PERMISO');
+    expect(usuarioRepository.crearPendientePorAdmin).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['staff', 'staff'],
+    ['tutor', 'alumno'],
+    ['superadmin', 'superadmin'],
+  ])('con rol %s puede crear un usuario %s (rol igual o inferior)', async (rol, rolNuevo) => {
+    const res = await request(app)
+      .post(URL)
+      .set('Authorization', `Bearer ${sesion(rol)}`)
+      .send(cuerpo({ rol: rolNuevo }));
+
+    expect(res.status).toBe(202);
+    expect(usuarioRepository.crearPendientePorAdmin).toHaveBeenCalled();
+  });
+
+  test.each([
+    ['tutor', 'staff'],
+    ['administrador', 'superadmin'],
+  ])('con rol %s no puede crear un usuario %s: 403 ROL_SUPERIOR', async (rol, rolNuevo) => {
+    const res = await request(app)
+      .post(URL)
+      .set('Authorization', `Bearer ${sesion(rol)}`)
+      .send(cuerpo({ rol: rolNuevo }));
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('ROL_SUPERIOR');
     expect(usuarioRepository.crearPendientePorAdmin).not.toHaveBeenCalled();
   });
 
@@ -139,7 +167,7 @@ describe('PATCH /api/v1/usuarios/:id (CU01 – edición por administrador)', () 
     expect(usuarioRepository.actualizar).not.toHaveBeenCalled();
   });
 
-  test.each(['alumno', 'staff', 'tutor'])('con rol %s responde 403 (RNF12)', async (rol) => {
+  test.each(['alumno'])('con rol %s responde 403 (RNF12)', async (rol) => {
     const res = await request(app)
       .patch(URL_USUARIO)
       .set('Authorization', `Bearer ${sesion(rol)}`)
@@ -147,6 +175,50 @@ describe('PATCH /api/v1/usuarios/:id (CU01 – edición por administrador)', () 
 
     expect(res.status).toBe(403);
     expect(usuarioRepository.actualizar).not.toHaveBeenCalled();
+  });
+
+  test('staff no puede editar los datos de otro trabajador: 403 SIN_PERMISO', async () => {
+    const res = await request(app)
+      .patch(URL_USUARIO)
+      .set('Authorization', `Bearer ${sesion('staff')}`)
+      .send({ nombre: 'Lucía' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('SIN_PERMISO');
+    expect(usuarioRepository.actualizar).not.toHaveBeenCalled();
+  });
+
+  test('staff puede cambiar el rol de otro staff a tutor', async () => {
+    const res = await request(app)
+      .patch(URL_USUARIO)
+      .set('Authorization', `Bearer ${sesion('staff')}`)
+      .send({ rol: 'tutor' });
+
+    expect(res.status).toBe(200);
+    expect(usuarioRepository.actualizar).toHaveBeenCalledWith(15, { idRol: 4 });
+  });
+
+  test('un tutor no puede editar a un staff: 403 ROL_SUPERIOR', async () => {
+    const res = await request(app)
+      .patch(URL_USUARIO)
+      .set('Authorization', `Bearer ${sesion('tutor')}`)
+      .send({ rol: 'tutor' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('ROL_SUPERIOR');
+    expect(usuarioRepository.actualizar).not.toHaveBeenCalled();
+  });
+
+  test('un tutor puede editar los datos de un alumno', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue({ id: 15, rol: 'alumno', estado: 'activo' });
+
+    const res = await request(app)
+      .patch(URL_USUARIO)
+      .set('Authorization', `Bearer ${sesion('tutor')}`)
+      .send({ nombre: 'Lucía María' });
+
+    expect(res.status).toBe(200);
+    expect(usuarioRepository.actualizar).toHaveBeenCalledWith(15, { nombre: 'Lucía María' });
   });
 
   test('como administrador actualiza datos y rol y responde 200', async () => {
@@ -220,12 +292,22 @@ describe('GET /api/v1/usuarios (CU01 – listado con búsqueda y filtros)', () =
     expect(usuarioRepository.listar).not.toHaveBeenCalled();
   });
 
-  test.each(['alumno', 'staff', 'tutor'])('con rol %s responde 403 (RNF12)', async (rol) => {
+  test.each(['alumno'])('con rol %s responde 403 (RNF12)', async (rol) => {
     const res = await request(app).get(URL).set('Authorization', `Bearer ${sesion(rol)}`);
 
     expect(res.status).toBe(403);
     expect(usuarioRepository.listar).not.toHaveBeenCalled();
   });
+
+  test.each(['superadmin', 'staff', 'tutor'])(
+    'con rol %s también ve el listado completo',
+    async (rol) => {
+      const res = await request(app).get(URL).set('Authorization', `Bearer ${sesion(rol)}`);
+
+      expect(res.status).toBe(200);
+      expect(usuarioRepository.listar).toHaveBeenCalled();
+    },
+  );
 
   test('como administrador devuelve la primera página con valores por defecto', async () => {
     const res = await request(app)
@@ -298,7 +380,7 @@ describe('PATCH /api/v1/usuarios/:id/estado (CU01 – flujo 3.b)', () => {
     expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
   });
 
-  test.each(['alumno', 'staff', 'tutor'])('con rol %s responde 403 (RNF12)', async (rol) => {
+  test.each(['alumno'])('con rol %s responde 403 (RNF12)', async (rol) => {
     const res = await request(app)
       .patch(URL_ESTADO)
       .set('Authorization', `Bearer ${sesion(rol)}`)
@@ -306,6 +388,41 @@ describe('PATCH /api/v1/usuarios/:id/estado (CU01 – flujo 3.b)', () => {
 
     expect(res.status).toBe(403);
     expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  test('staff puede suspender a otro staff', async () => {
+    const res = await request(app)
+      .patch(URL_ESTADO)
+      .set('Authorization', `Bearer ${sesion('staff')}`)
+      .send({ estado: 'suspendido' });
+
+    expect(res.status).toBe(200);
+    expect(usuarioRepository.actualizarEstado).toHaveBeenCalledWith(15, 3);
+  });
+
+  test('un tutor no puede suspender a un staff: 403 ROL_SUPERIOR', async () => {
+    const res = await request(app)
+      .patch(URL_ESTADO)
+      .set('Authorization', `Bearer ${sesion('tutor')}`)
+      .send({ estado: 'suspendido' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('ROL_SUPERIOR');
+    expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  test('no se puede dar de baja al único superadmin activo: 400 ULTIMO_SUPERADMIN', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue({ id: 15, rol: 'superadmin', estado: 'activo' });
+    usuarioRepository.contarSuperadminsActivos.mockResolvedValue(0);
+
+    const res = await request(app)
+      .patch(URL_ESTADO)
+      .set('Authorization', `Bearer ${sesion('superadmin')}`)
+      .send({ estado: 'dado_de_baja' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('ULTIMO_SUPERADMIN');
+    expect(usuarioRepository.darDeBajaYQuitarDeGrupos).not.toHaveBeenCalled();
   });
 
   test('como administrador cambia el estado y responde 200', async () => {
@@ -398,13 +515,36 @@ describe('POST /api/v1/usuarios/:id/restablecer-password (CU01 – flujo 3.a)', 
     expect(usuarioRepository.restablecerPasswordTemporal).not.toHaveBeenCalled();
   });
 
-  test.each(['alumno', 'staff', 'tutor'])('con rol %s responde 403 (RNF12)', async (rol) => {
+  test.each(['alumno'])('con rol %s responde 403 (RNF12)', async (rol) => {
     const res = await request(app)
       .post(URL_RESTABLECER)
       .set('Authorization', `Bearer ${sesion(rol)}`);
 
     expect(res.status).toBe(403);
     expect(usuarioRepository.restablecerPasswordTemporal).not.toHaveBeenCalled();
+  });
+
+  test.each(['staff', 'tutor'])(
+    'con rol %s no puede restablecer la de un trabajador: 403',
+    async (rol) => {
+      const res = await request(app)
+        .post(URL_RESTABLECER)
+        .set('Authorization', `Bearer ${sesion(rol)}`);
+
+      expect(res.status).toBe(403);
+      expect(usuarioRepository.restablecerPasswordTemporal).not.toHaveBeenCalled();
+    },
+  );
+
+  test('staff puede restablecer la contraseña de un alumno', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue({ id: 15, rol: 'alumno', estado: 'activo' });
+
+    const res = await request(app)
+      .post(URL_RESTABLECER)
+      .set('Authorization', `Bearer ${sesion('staff')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.passwordTemporal).toEqual(expect.any(String));
   });
 
   test('como administrador devuelve la temporal una vez y sin caché', async () => {

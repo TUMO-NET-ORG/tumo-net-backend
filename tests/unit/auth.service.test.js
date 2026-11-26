@@ -184,6 +184,61 @@ describe('solicitarRecuperacion (CU05 3.a)', () => {
     await authService.solicitarRecuperacion('ana@tumo.world');
     expect(mailService.enviarEnlaceRecuperacion).not.toHaveBeenCalled();
   });
+
+  describe('cuenta pendiente (invitación vencida)', () => {
+    beforeEach(() => {
+      authRepository.buscarPorEmail.mockResolvedValue(
+        usuarioBase({ estado: 'pendiente_verificacion' }),
+      );
+    });
+
+    test('reenvía la invitación, guarda solo su hash y vence a las 48 horas', async () => {
+      authRepository.renovarInvitacion.mockResolvedValue(true);
+      const antes = Date.now();
+
+      await authService.solicitarRecuperacion('ana@tumo.world');
+
+      const [usuarioId, tokenHash, vencimiento] = authRepository.renovarInvitacion.mock.calls[0];
+      const [email, tokenEnviado, tipo] = mailService.enviarEnlaceAccion.mock.calls[0];
+      expect(usuarioId).toBe(7);
+      expect(email).toBe('ana@tumo.world');
+      expect(tipo).toBe('invitacion');
+      expect(tokenHash).toBe(sha256(tokenEnviado));
+      expect(vencimiento.getTime()).toBeGreaterThanOrEqual(antes + 48 * 60 * 60 * 1000);
+      expect(authRepository.crearTokenRecuperacion).not.toHaveBeenCalled();
+      expect(mailService.enviarEnlaceRecuperacion).not.toHaveBeenCalled();
+    });
+
+    test('si nunca fue invitada (autorregistro) o pidió hace menos de 60 s no envía nada', async () => {
+      authRepository.renovarInvitacion.mockResolvedValue(false);
+
+      await authService.solicitarRecuperacion('ana@tumo.world');
+
+      expect(mailService.enviarEnlaceAccion).not.toHaveBeenCalled();
+      expect(mailService.enviarEnlaceRecuperacion).not.toHaveBeenCalled();
+    });
+
+    test('si falla el envío no lo propaga (no revela que el email existe)', async () => {
+      authRepository.renovarInvitacion.mockResolvedValue(true);
+      mailService.enviarEnlaceAccion.mockRejectedValue(new Error('SMTP caído'));
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(authService.solicitarRecuperacion('ana@tumo.world')).resolves.toBeUndefined();
+    });
+  });
+
+  test.each(['suspendido', 'inactivo', 'dado_de_baja'])(
+    'a una cuenta %s no le envía nada',
+    async (estado) => {
+      authRepository.buscarPorEmail.mockResolvedValue(usuarioBase({ estado }));
+
+      await authService.solicitarRecuperacion('ana@tumo.world');
+
+      expect(authRepository.renovarInvitacion).not.toHaveBeenCalled();
+      expect(mailService.enviarEnlaceAccion).not.toHaveBeenCalled();
+      expect(mailService.enviarEnlaceRecuperacion).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('restablecerPassword (CU05 3.a.3)', () => {

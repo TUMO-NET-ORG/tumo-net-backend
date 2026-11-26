@@ -39,6 +39,22 @@
 			"value": ""
 		},
 		{
+			"key": "superadmin_email",
+			"value": "superadmin@tumo.world"
+		},
+		{
+			"key": "superadmin_password",
+			"value": "superadmin1"
+		},
+		{
+			"key": "superadmin_jwt_token",
+			"value": ""
+		},
+		{
+			"key": "superadmin_id",
+			"value": ""
+		},
+		{
 			"key": "alta_admin_id",
 			"value": ""
 		},
@@ -224,6 +240,55 @@
 									"if (pm.response.code === 200) {",
 									"  pm.collectionVariables.set('admin_jwt_token', respuesta.token);",
 									"  pm.collectionVariables.set('admin_id', respuesta.usuario.id);",
+									"}"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "login superadmin",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/auth/login",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{superadmin_email}}\",\n  \"password\": \"{{superadmin_password}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Login con el superadmin (superadmin@tumo.world / superadmin1). La migración 008_superadmin.sql no crea el usuario: hay que tener ese usuario y asignarle el rol a mano con el UPDATE comentado en la migración."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"const respuesta = pm.response.json();",
+									"pm.test('el usuario es superadmin', function () {",
+									"  pm.expect(respuesta.usuario.rol).to.eql('superadmin');",
+									"});",
+									"if (pm.response.code === 200) {",
+									"  pm.collectionVariables.set('superadmin_jwt_token', respuesta.token);",
+									"  pm.collectionVariables.set('superadmin_id', respuesta.usuario.id);",
 									"}"
 								]
 							}
@@ -3164,6 +3229,274 @@
 								"type": "text/javascript",
 								"exec": [
 									"pm.test('responde con 401', function () { pm.response.to.have.status(401); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "jerarquia - listado como superadmin (200)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios"
+							]
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{superadmin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Todos los trabajadores ven el listado completo. Ejecutar después de \"auth / login superadmin\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 200', function () { pm.response.to.have.status(200); });",
+									"pm.test('devuelve usuarios', function () { pm.expect(pm.response.json().usuarios).to.be.an('array'); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "jerarquia - administrador no puede crear superadmin (403)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Prueba\",\n  \"apellido\": \"Jerarquia\",\n  \"documento\": \"{{jerarquia_documento}}\",\n  \"email\": \"{{jerarquia_email}}\",\n  \"rol\": \"superadmin\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Solo se pueden asignar roles iguales o inferiores al propio. Ejecutar después de \"auth / login administrador\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Cédula uruguaya válida (7 dígitos + dígito verificador)",
+									"function cedulaAleatoria() {",
+									"  const base = String(Math.floor(1000000 + Math.random() * 8999999));",
+									"  const pesos = [2, 9, 8, 7, 6, 3, 4];",
+									"  const suma = pesos.reduce((t, p, i) => t + Number(base[i]) * p, 0);",
+									"  return base + ((10 - (suma % 10)) % 10);",
+									"}",
+									"// Variables locales del request: no pisan las de la colección",
+									"pm.variables.set('jerarquia_email', `jerarquia.${Date.now()}@tumo.world`);",
+									"pm.variables.set('jerarquia_documento', cedulaAleatoria());"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 403', function () { pm.response.to.have.status(403); });",
+									"pm.test('error ROL_SUPERIOR', function () { pm.expect(pm.response.json().error).to.eql('ROL_SUPERIOR'); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "jerarquia - administrador no puede editar al superadmin (403)",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/{{superadmin_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"{{superadmin_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nombre\": \"Otro\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Solo se opera sobre usuarios con un rol igual o inferior al propio. Ejecutar después de \"auth / login administrador\" y \"auth / login superadmin\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 403', function () { pm.response.to.have.status(403); });",
+									"pm.test('error ROL_SUPERIOR', function () { pm.expect(pm.response.json().error).to.eql('ROL_SUPERIOR'); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "jerarquia - administrador no puede suspender al superadmin (403)",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/{{superadmin_id}}/estado",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"{{superadmin_id}}",
+								"estado"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"estado\": \"suspendido\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{admin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Ejecutar después de \"auth / login administrador\" y \"auth / login superadmin\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 403', function () { pm.response.to.have.status(403); });",
+									"pm.test('error ROL_SUPERIOR', function () { pm.expect(pm.response.json().error).to.eql('ROL_SUPERIOR'); });"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "jerarquia - superadmin no puede cambiar su propio rol (400)",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{server}}/api/v1/usuarios/{{superadmin_id}}",
+							"host": [
+								"{{server}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"usuarios",
+								"{{superadmin_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"rol\": \"administrador\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{superadmin_jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"description": "Nadie cambia su propio rol: así el último superadmin no puede quitarse el rol. Ejecutar después de \"auth / login superadmin\"."
+					},
+					"response": [],
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('responde con 400', function () { pm.response.to.have.status(400); });",
+									"pm.test('error AUTO_CAMBIO_ROL', function () { pm.expect(pm.response.json().error).to.eql('AUTO_CAMBIO_ROL'); });"
 								]
 							}
 						}

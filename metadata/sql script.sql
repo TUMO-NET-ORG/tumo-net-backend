@@ -25,6 +25,7 @@ create table estado_usuario (
 ) engine=innodb default charset=utf8mb4 collate=utf8mb4_unicode_ci;
 
 insert into roles (codigo, nombre) values
+('superadmin', 'Superadmin'),
 ('administrador', 'Administrador'),
   ('alumno', 'Alumno'),
   ('staff', 'Staff'),
@@ -61,6 +62,9 @@ create table usuarios (
   constraint fk_usuario_rol foreign key (id_rol) references roles (id),
   constraint fk_usuario_estado foreign key (id_estado) references estado_usuario (id)
 ) engine=innodb default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+
+-- El primer superadmin se asigna a mano a un usuario existente
+-- (ver metadata/migrations/008_superadmin.sql).
 
 create table token_recuperacion (
   id int unsigned auto_increment primary key,

@@ -132,8 +132,8 @@ describe('listarGrupos', () => {
     grupoRepository.listar.mockResolvedValue({ grupos: [GRUPO], total: 45 });
   });
 
-  test('un administrador ve todos los grupos', async () => {
-    await listarGrupos({ pagina: 1, limite: 20 }, ADMIN);
+  test.each([ADMIN, { id: 100, rol: 'superadmin' }])('un $rol ve todos los grupos', async (usuario) => {
+    await listarGrupos({ pagina: 1, limite: 20 }, usuario);
 
     expect(grupoRepository.listar).toHaveBeenCalledWith(
       expect.objectContaining({ soloDelUsuario: null }),
@@ -245,8 +245,8 @@ describe('editarGrupo', () => {
     });
   });
 
-  test('un administrador edita cualquier grupo sin ser responsable', async () => {
-    await editarGrupo(10, datosGrupo(), ADMIN);
+  test.each([ADMIN, { id: 100, rol: 'superadmin' }])('un $rol edita cualquier grupo sin ser responsable', async (usuario) => {
+    await editarGrupo(10, datosGrupo(), usuario);
 
     expect(grupoRepository.esResponsable).not.toHaveBeenCalled();
     expect(grupoRepository.actualizar).toHaveBeenCalled();

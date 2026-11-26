@@ -242,6 +242,18 @@ async function listarCatalogosUsuario() {
   return { roles, estados };
 }
 
+// Cuántos superadmin activos hay sin contar a `exceptoId`. Sirve para no dejar
+// el sistema sin ningún superadmin activo.
+async function contarSuperadminsActivos(exceptoId) {
+  const [filas] = await pool.execute(
+    `SELECT COUNT(*) AS cantidad ${FROM_USUARIOS}
+     WHERE r.codigo = 'superadmin' AND e.codigo = 'activo' AND u.id <> ?`,
+    [exceptoId],
+  );
+
+  return Number(filas[0].cantidad);
+}
+
 // CU01 (flujo 3.b): cambio de estado. La baja es lógica: el registro no se borra.
 async function actualizarEstado(id, idEstado) {
   await pool.execute('UPDATE usuarios SET id_estado = ? WHERE id = ?', [
@@ -328,6 +340,7 @@ async function restablecerPasswordTemporal(id, passwordHash) {
 }
 
 module.exports = {
+  contarSuperadminsActivos,
   actualizar,
   restablecerPasswordTemporal,
   actualizarEstado,

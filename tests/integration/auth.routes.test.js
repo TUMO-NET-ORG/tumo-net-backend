@@ -186,6 +186,23 @@ describe('POST /api/v1/auth/forgot-password', () => {
     expect(mailService.enviarEnlaceRecuperacion).toHaveBeenCalled();
   });
 
+  test('202 y reenvía la invitación si la cuenta sigue pendiente', async () => {
+    authRepository.buscarPorEmail.mockResolvedValue(usuarioBD({ estado: 'pendiente_verificacion' }));
+    authRepository.renovarInvitacion.mockResolvedValue(true);
+
+    const res = await request(app)
+      .post('/api/v1/auth/forgot-password')
+      .send({ email: 'ana@tumo.world' });
+
+    expect(res.status).toBe(202);
+    expect(mailService.enviarEnlaceAccion).toHaveBeenCalledWith(
+      'ana@tumo.world',
+      expect.any(String),
+      'invitacion',
+    );
+    expect(mailService.enviarEnlaceRecuperacion).not.toHaveBeenCalled();
+  });
+
   test('misma respuesta 202 si el email no existe', async () => {
     authRepository.buscarPorEmail.mockResolvedValue(undefined);
 
