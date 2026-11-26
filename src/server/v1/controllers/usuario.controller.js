@@ -45,7 +45,7 @@ async function crearUsuarioAdmin(req, res) {
     return responderDatosInvalidos(res, validacion.error);
   }
 
-  const usuario = await crearUsuarioPorAdmin(validacion.value);
+  const usuario = await crearUsuarioPorAdmin(validacion.value, req.usuario);
   return res.status(202).json({ usuario });
 }
 
@@ -107,6 +107,7 @@ async function solicitarCambioEmailAdmin(req, res) {
   const resultado = await solicitarCambioEmailPorAdmin(
     validacionId.value,
     validacion.value,
+    req.usuario,
   );
   return res.status(202).json(resultado);
 }

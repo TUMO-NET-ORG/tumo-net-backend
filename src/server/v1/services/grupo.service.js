@@ -2,8 +2,10 @@
 const grupoRepository = require('../repositories/grupo.repository');
 const AppError = require('../errors/AppError');
 
-// Roles que pueden ser responsables de un grupo 
-const ROLES_RESPONSABLE = ['staff', 'tutor', 'administrador'];
+const { ROLES_TRABAJADORES, ROLES_ADMINISTRADORES } = require('../utils/roles');
+
+// Roles que pueden ser responsables de un grupo: todos los trabajadores
+const ROLES_RESPONSABLE = ROLES_TRABAJADORES;
 
 
 /*Si una persona viene en las dos listas, queda SOLO como responsable.
@@ -55,7 +57,7 @@ async function validarMiembros(responsables, integrantes, { quitarDadosDeBaja = 
     }
   }
 
-  // Regla 3: los responsables tienen que ser staff, tutor o administrador
+  // Regla 3: los responsables tienen que ser trabajadores (cualquier rol menos alumno)
   const sinRolValido = responsables.filter(
     (id) => !ROLES_RESPONSABLE.includes(porId.get(id).rol)
   );
@@ -88,9 +90,9 @@ async function obtenerGrupoOFallar(grupoId) {
 }
 
 /*Permiso para editar o borrar un grupo:
- un administrador puede con cualquier grupo; staff y tutor solo con los que son responsables.*/
+ un administrador o superadmin puede con cualquier grupo; staff y tutor solo con los que son responsables.*/
 async function verificarPuedeGestionar(grupoId, usuarioActual) {
-  if (usuarioActual.rol === 'administrador') return;
+  if (ROLES_ADMINISTRADORES.includes(usuarioActual.rol)) return;
   const esResponsable = await grupoRepository.esResponsable(grupoId, usuarioActual.id);
   if (!esResponsable) {
     throw new AppError(403, 'Solo un responsable del grupo puede modificarlo', 'SIN_PERMISO_GRUPO');
@@ -99,10 +101,10 @@ async function verificarPuedeGestionar(grupoId, usuarioActual) {
 
 /*
  Permiso para ver el detalle:
- un administrador ve cualquier grupo; el resto, solo los grupos donde está.
+ un administrador o superadmin ve cualquier grupo; el resto, solo los grupos donde está.
  */
 async function verificarPuedeVer(grupoId, usuarioActual) {
-  if (usuarioActual.rol === 'administrador') return;
+  if (ROLES_ADMINISTRADORES.includes(usuarioActual.rol)) return;
   const esIntegrante = await grupoRepository.esIntegrante(grupoId, usuarioActual.id);
   if (!esIntegrante) {
     throw new AppError(403, 'No formás parte de este grupo', 'SIN_PERMISO_GRUPO');
@@ -111,10 +113,10 @@ async function verificarPuedeVer(grupoId, usuarioActual) {
 
 // LISTAR 
 
-//Un administrador ve todos los grupos; el resto, solo los grupos donde está.
+//Un administrador o superadmin ve todos los grupos; el resto, solo los grupos donde está.
  
 async function listarGrupos({ pagina, limite, buscar }, usuarioActual) {
-  const soloDelUsuario = usuarioActual.rol === 'administrador' ? null : usuarioActual.id;
+  const soloDelUsuario = ROLES_ADMINISTRADORES.includes(usuarioActual.rol) ? null : usuarioActual.id;
 
   const { grupos, total } = await grupoRepository.listar({
     soloDelUsuario,
@@ -162,7 +164,7 @@ async function crearGrupo(datos, creadoPorId) {
   const { nombre, descripcion } = datos;
 
   /* Si no mandan responsables, el responsable es quien crea el grupo.
-   Siempre es válido: la ruta ya exige rol administrador, staff o tutor.
+   Siempre es válido: la ruta ya exige un rol de trabajador.
    Si los mandan, se respetan: quien crea puede no quedar como responsable.*/
   
   const responsablesPedidos = datos.responsables ?? [creadoPorId];

@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const AppError = require('../errors/AppError');
+const { DURACION_INVITACION_HORAS } = require('../utils/invitacion');
 
 let transporter;
 
@@ -130,7 +131,7 @@ async function enviarEnlaceAccion(email, token, tipo) {
       ? 'Activá tu cuenta de TUMO'
       : 'Confirmá el cambio de mail de TUMO';
     const mensajeHtml = esInvitacion
-      ? 'Un administrador creó una cuenta para vos. Usá el botón para verificar tu email, aceptar los términos y definir tu contraseña.'
+      ? `Se creó una cuenta de TUMO para vos. Usá el botón para verificar tu email, aceptar los términos y definir tu contraseña. El botón vence en ${DURACION_INVITACION_HORAS} horas; si venció, pedí uno nuevo desde "Olvidé mi contraseña".`
       : 'Solicitaste cambiar tu email de TUMO. Usá el botón para confirmar la nueva dirección.';
     const botonHtml = esInvitacion
       ? `

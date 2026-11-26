@@ -275,6 +275,52 @@ async function crearTokenAccion(
   }
 }
 
+/* Genera una invitación nueva para una cuenta que ya fue invitada y sigue pendiente.
+ Devuelve false (y no crea nada) si la cuenta nunca fue invitada, si ya no está
+ pendiente, o si se pidió otra hace menos de 60 segundos. */
+async function renovarInvitacion(usuarioId, tokenHash, fechaExpiracion) {
+  const conexion = await pool.getConnection();
+
+  try {
+    await conexion.beginTransaction();
+    const [invitaciones] = await conexion.execute(
+      `SELECT t.fecha_creacion > DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 60 SECOND) AS reciente
+       FROM token_recuperacion t
+       INNER JOIN usuarios u ON u.id = t.usuario_id
+       INNER JOIN estado_usuario e ON e.id = u.id_estado
+       WHERE t.usuario_id = ? AND t.tipo = 'invitacion'
+         AND e.codigo = 'pendiente_verificacion'
+       FOR UPDATE`,
+      [usuarioId],
+    );
+
+    if (invitaciones.length === 0 || invitaciones.some((fila) => Number(fila.reciente) === 1)) {
+      await conexion.rollback();
+      return false;
+    }
+
+    await conexion.execute(
+      `UPDATE token_recuperacion
+       SET usado = 1, fecha_uso = CURRENT_TIMESTAMP
+       WHERE usuario_id = ? AND tipo = 'invitacion' AND usado = 0`,
+      [usuarioId],
+    );
+    await conexion.execute(
+      `INSERT INTO token_recuperacion (
+         usuario_id, token_hash, tipo, fecha_expiracion
+       ) VALUES (?, ?, 'invitacion', ?)`,
+      [usuarioId, tokenHash, fechaExpiracion],
+    );
+    await conexion.commit();
+    return true;
+  } catch (error) {
+    await conexion.rollback();
+    throw error;
+  } finally {
+    conexion.release();
+  }
+}
+
 async function buscarTokenAccion(tokenHash) {
   const [filas] = await pool.execute(
     `SELECT usuario_id AS usuarioId, tipo, email_pendiente AS emailPendiente,
@@ -450,6 +496,7 @@ module.exports = {
   registrarIntentoFallido,
   reiniciarIntentos,
   buscarActivoPorId,
+  renovarInvitacion,
   buscarVerificacionPorEmail,
   registrarIntentoVerificacion,
   confirmarEmail,

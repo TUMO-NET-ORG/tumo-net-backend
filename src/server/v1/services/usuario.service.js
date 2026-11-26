@@ -6,6 +6,8 @@ const authRepository = require('../repositories/auth.repository');
 const grupoRepository = require('../repositories/grupo.repository');
 const { ROLES_RESPONSABLE } = require('./grupo.service');
 const { enviarCodigoVerificacion, enviarEnlaceAccion } = require('./mail.service');
+const { ROLES, ROLES_ADMINISTRADORES, rolIgualOInferior } = require('../utils/roles');
+const { vencimientoInvitacion } = require('../utils/invitacion');
 
 const DURACION_CODIGO_MINUTOS = 15;
 
@@ -113,10 +115,76 @@ function errorDuplicado(error) {
   );
 }
 
-// CU01 (RF1): el administrador crea un usuario individualmente con el rol
-// indicado. La cuenta queda activa (no requiere verificar el email, porque la
-// crea el administrador) y la contraseña inicial se guarda hasheada (RNF07).
-async function crearUsuarioPorAdmin(datos) {
+/* ---------- Jerarquía de roles (RNF12) ----------
+ superadmin > administrador > staff > tutor > alumno.
+ `actor` es quien hace el cambio (req.usuario) y `objetivo` el usuario afectado. */
+
+// Solo se opera sobre usuarios con un rol igual o inferior al propio.
+function verificarPuedeGestionar(actor, objetivo) {
+  if (!rolIgualOInferior(objetivo.rol, actor.rol)) {
+    throw new AppError(
+      403,
+      'No podés gestionar a un usuario con un rol superior al tuyo',
+      'ROL_SUPERIOR',
+    );
+  }
+}
+
+// Solo se asignan roles iguales o inferiores al propio.
+function verificarPuedeAsignarRol(actor, rol) {
+  if (!ROLES.includes(rol)) {
+    throw new AppError(400, 'El rol indicado no existe', 'ROL_INVALIDO');
+  }
+  if (!rolIgualOInferior(rol, actor.rol)) {
+    throw new AppError(
+      403,
+      'No podés asignar un rol superior al tuyo',
+      'ROL_SUPERIOR',
+    );
+  }
+}
+
+// Datos personales, email y contraseña: los de un alumno los cambia cualquier
+// trabajador; los de un trabajador, solo un administrador o superadmin.
+function verificarPuedeEditarDatos(actor, objetivo) {
+  verificarPuedeGestionar(actor, objetivo);
+  if (objetivo.rol !== 'alumno' && !ROLES_ADMINISTRADORES.includes(actor.rol)) {
+    throw new AppError(
+      403,
+      'Solo un administrador puede modificar los datos o la contraseña de otro trabajador',
+      'SIN_PERMISO',
+    );
+  }
+}
+
+// Siempre tiene que quedar al menos un superadmin activo: si el objetivo es el
+// único, no se le puede quitar el rol ni dejar de estar activo.
+async function verificarNoEsUltimoSuperadmin(objetivo) {
+  if (objetivo.rol !== 'superadmin') return;
+  const otrosActivos = await usuarioRepository.contarSuperadminsActivos(objetivo.id);
+  if (otrosActivos === 0) {
+    throw new AppError(
+      400,
+      'Es el único superadmin activo: no se le puede quitar el rol ni cambiar el estado',
+      'ULTIMO_SUPERADMIN',
+    );
+  }
+}
+
+async function buscarUsuarioOFallar(id) {
+  const usuario = await usuarioRepository.buscarPorId(id);
+  if (!usuario) {
+    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
+  }
+  return usuario;
+}
+
+// CU01 (RF1): un trabajador crea un usuario individualmente con el rol
+// indicado, que tiene que ser igual o inferior al suyo. La cuenta queda
+// pendiente y se envía una invitación por mail para que defina su contraseña.
+async function crearUsuarioPorAdmin(datos, actor) {
+  verificarPuedeAsignarRol(actor, datos.rol);
+
   const ids = await usuarioRepository.buscarIdsPorCodigo(
     datos.rol,
     'pendiente_verificacion',
@@ -147,7 +215,7 @@ async function crearUsuarioPorAdmin(datos) {
     await authRepository.crearTokenAccion(
       usuario.id,
       hashearCodigo(token),
-      new Date(Date.now() + DURACION_CODIGO_MINUTOS * 60 * 1000),
+      vencimientoInvitacion(),
       'invitacion',
     );
     try {
@@ -168,19 +236,14 @@ async function crearUsuarioPorAdmin(datos) {
   }
 }
 
+// Todos los trabajadores pueden ver cualquier usuario (el listado no se filtra por jerarquía).
 async function obtenerUsuarioPorAdmin(id) {
-  const usuario = await usuarioRepository.buscarPorId(id);
-  if (!usuario) {
-    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
-  }
-  return usuario;
+  return buscarUsuarioOFallar(id);
 }
 
-async function solicitarCambioEmailPorAdmin(id, email) {
-  const usuario = await usuarioRepository.buscarPorId(id);
-  if (!usuario) {
-    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
-  }
+async function solicitarCambioEmailPorAdmin(id, email, actor) {
+  const usuario = await buscarUsuarioOFallar(id);
+  verificarPuedeEditarDatos(actor, usuario);
 
   const existente = await authRepository.buscarPorEmail(email);
   if (existente && existente.id !== id) {
@@ -199,29 +262,33 @@ async function solicitarCambioEmailPorAdmin(id, email) {
   return { mensaje: 'Se envió un enlace de confirmación al nuevo email' };
 }
 
-// CU01 (RF1): el administrador edita los datos de un usuario, incluido el
-// rol. El cambio de rol aplica en la próxima petición del usuario, porque el
-// middleware lee el rol desde la base y no desde el token.
-async function editarUsuarioPorAdmin(id, cambios, admin) {
-  const usuario = await usuarioRepository.buscarPorId(id);
-
-  if (!usuario) {
-    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
-  }
-
-  if (
-    id === admin.id &&
-    cambios.rol !== undefined &&
-    cambios.rol !== 'administrador'
-  ) {
-    throw new AppError(
-      400,
-      'No podés quitarte a vos mismo el rol de administrador',
-      'AUTO_CAMBIO_ROL',
-    );
-  }
-
+// CU01 (RF1): edición de un usuario, incluido el rol. El cambio de rol aplica
+// en la próxima petición del usuario, porque el middleware lee el rol desde la
+// base y no desde el token.
+//  - Rol: cualquier trabajador, sobre usuarios con rol igual o inferior al suyo
+//    y asignando como tope su propio rol.
+//  - Resto de los datos: ver verificarPuedeEditarDatos.
+async function editarUsuarioPorAdmin(id, cambios, actor) {
+  const usuario = await buscarUsuarioOFallar(id);
   const { rol, ...datos } = cambios;
+  const cambiaRol = rol !== undefined && rol !== usuario.rol;
+
+  verificarPuedeGestionar(actor, usuario);
+  if (Object.keys(datos).length > 0) {
+    verificarPuedeEditarDatos(actor, usuario);
+  }
+
+  if (cambiaRol) {
+    if (id === actor.id) {
+      throw new AppError(
+        400,
+        'No podés cambiar tu propio rol',
+        'AUTO_CAMBIO_ROL',
+      );
+    }
+    verificarPuedeAsignarRol(actor, rol);
+    await verificarNoEsUltimoSuperadmin(usuario);
+  }
 
   if (rol !== undefined) {
     const ids = await usuarioRepository.buscarIdsPorCodigo(rol, 'activo');
@@ -258,12 +325,12 @@ async function editarUsuarioPorAdmin(id, cambios, admin) {
   }
 }
 
-// CU01 (flujo 3.b, RF2): el administrador cambia el estado de un usuario.
-// Al dejar de estar activo no puede iniciar sesión, y el token que ya tenía
-// deja de servir en su próxima petición (el middleware lee el estado de la
-// base).
-async function cambiarEstadoPorAdmin(id, estado, admin) {
-  if (id === admin.id) {
+// CU01 (flujo 3.b, RF2): un trabajador cambia el estado de un usuario con rol
+// igual o inferior al suyo. Al dejar de estar activo no puede iniciar sesión,
+// y el token que ya tenía deja de servir en su próxima petición (el middleware
+// lee el estado de la base).
+async function cambiarEstadoPorAdmin(id, estado, actor) {
+  if (id === actor.id) {
     throw new AppError(
       400,
       'No podés cambiar tu propio estado',
@@ -279,10 +346,10 @@ async function cambiarEstadoPorAdmin(id, estado, admin) {
     );
   }
 
-  const usuario = await usuarioRepository.buscarPorId(id);
-
-  if (!usuario) {
-    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
+  const usuario = await buscarUsuarioOFallar(id);
+  verificarPuedeGestionar(actor, usuario);
+  if (estado !== 'activo') {
+    await verificarNoEsUltimoSuperadmin(usuario);
   }
 
   const idEstado = await usuarioRepository.buscarIdEstadoPorCodigo(estado);
@@ -319,11 +386,11 @@ function listarNombres(grupos) {
   return grupos.map((grupo) => grupo.nombre).join(', ');
 }
 
-// CU01 (flujo 3.a, RF4): el administrador restablece la contraseña de un
-// usuario. La temporal se devuelve una sola vez para que el administrador se
-// la comunique; solo se guarda su hash (RNF07).
-async function restablecerPasswordPorAdmin(id, admin) {
-  if (id === admin.id) {
+// CU01 (flujo 3.a, RF4): restablece la contraseña de un usuario (permisos en
+// verificarPuedeEditarDatos). La temporal se devuelve una sola vez para que se
+// la comuniquen al usuario; solo se guarda su hash (RNF07).
+async function restablecerPasswordPorAdmin(id, actor) {
+  if (id === actor.id) {
     throw new AppError(
       400,
       'Para cambiar tu propia contraseña usá la opción de cambio de contraseña',
@@ -331,11 +398,8 @@ async function restablecerPasswordPorAdmin(id, admin) {
     );
   }
 
-  const usuario = await usuarioRepository.buscarPorId(id);
-
-  if (!usuario) {
-    throw new AppError(404, 'El usuario no existe', 'USUARIO_NO_ENCONTRADO');
-  }
+  const usuario = await buscarUsuarioOFallar(id);
+  verificarPuedeEditarDatos(actor, usuario);
 
   const passwordTemporal = generarPasswordTemporal();
   const passwordHash = await argon2.hash(passwordTemporal);

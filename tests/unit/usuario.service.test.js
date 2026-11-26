@@ -14,7 +14,18 @@ const {
   generarPasswordTemporal,
   listarUsuarios,
   restablecerPasswordPorAdmin,
+  solicitarCambioEmailPorAdmin,
 } = require('../../src/server/v1/services/usuario.service');
+
+const authRepository = require('../../src/server/v1/repositories/auth.repository');
+
+// Quien hace el cambio (req.usuario), según su rol.
+const ACTORES = {
+  superadmin: { id: 100, rol: 'superadmin' },
+  administrador: { id: 1, rol: 'administrador' },
+  staff: { id: 2, rol: 'staff' },
+  tutor: { id: 3, rol: 'tutor' },
+};
 
 function datosAlta(cambios = {}) {
   return {
@@ -54,7 +65,7 @@ describe('crearUsuarioPorAdmin (CU01 – alta individual, RF1)', () => {
   });
 
   test('crea el usuario pendiente con el rol indicado y lo devuelve', async () => {
-    const usuario = await crearUsuarioPorAdmin(datosAlta());
+    const usuario = await crearUsuarioPorAdmin(datosAlta(), ACTORES.administrador);
 
     expect(usuarioRepository.buscarIdsPorCodigo).toHaveBeenCalledWith('tutor', 'pendiente_verificacion');
     expect(usuarioRepository.crearPendientePorAdmin).toHaveBeenCalledWith(
@@ -69,7 +80,7 @@ describe('crearUsuarioPorAdmin (CU01 – alta individual, RF1)', () => {
   });
 
   test('guarda la contraseña con hash argon2, nunca en texto plano (RNF07)', async () => {
-    await crearUsuarioPorAdmin(datosAlta());
+    await crearUsuarioPorAdmin(datosAlta(), ACTORES.administrador);
 
     const guardado = usuarioRepository.crearPendientePorAdmin.mock.calls[0][0];
     expect(guardado).not.toHaveProperty('password');
@@ -77,8 +88,18 @@ describe('crearUsuarioPorAdmin (CU01 – alta individual, RF1)', () => {
     expect(guardado.passwordHash).toMatch(/^\$argon2/);
   });
 
+  test('la invitación vence a las 48 horas', async () => {
+    const antes = Date.now();
+    await crearUsuarioPorAdmin(datosAlta(), ACTORES.administrador);
+
+    const [, , vencimiento, tipo] = authRepository.crearTokenAccion.mock.calls[0];
+    expect(tipo).toBe('invitacion');
+    expect(vencimiento.getTime()).toBeGreaterThanOrEqual(antes + 48 * 60 * 60 * 1000);
+    expect(vencimiento.getTime()).toBeLessThanOrEqual(Date.now() + 48 * 60 * 60 * 1000);
+  });
+
   test('envía una invitación por mail', async () => {
-    await crearUsuarioPorAdmin(datosAlta());
+    await crearUsuarioPorAdmin(datosAlta(), ACTORES.administrador);
 
     expect(mailService.enviarEnlaceAccion).toHaveBeenCalledWith(
       'lucia@tumo.world',
@@ -90,7 +111,7 @@ describe('crearUsuarioPorAdmin (CU01 – alta individual, RF1)', () => {
   test('con un email ya registrado responde 409 EMAIL_DUPLICADO', async () => {
     usuarioRepository.crearPendientePorAdmin.mockRejectedValue(errorDuplicado('uk_usuario_email'));
 
-    await expect(crearUsuarioPorAdmin(datosAlta())).rejects.toMatchObject({
+    await expect(crearUsuarioPorAdmin(datosAlta(), ACTORES.administrador)).rejects.toMatchObject({
       statusCode: 409,
       code: 'EMAIL_DUPLICADO',
     });
@@ -99,7 +120,7 @@ describe('crearUsuarioPorAdmin (CU01 – alta individual, RF1)', () => {
   test('con un documento ya registrado responde 409 DOCUMENTO_DUPLICADO', async () => {
     usuarioRepository.crearPendientePorAdmin.mockRejectedValue(errorDuplicado('uk_usuario_documento'));
 
-    await expect(crearUsuarioPorAdmin(datosAlta())).rejects.toMatchObject({
+    await expect(crearUsuarioPorAdmin(datosAlta(), ACTORES.administrador)).rejects.toMatchObject({
       statusCode: 409,
       code: 'DOCUMENTO_DUPLICADO',
     });
@@ -108,7 +129,7 @@ describe('crearUsuarioPorAdmin (CU01 – alta individual, RF1)', () => {
   test('si el rol no existe en la base responde 400 ROL_INVALIDO', async () => {
     usuarioRepository.buscarIdsPorCodigo.mockResolvedValue({ id_rol: null, id_estado: 1 });
 
-    await expect(crearUsuarioPorAdmin(datosAlta())).rejects.toMatchObject({
+    await expect(crearUsuarioPorAdmin(datosAlta(), ACTORES.administrador)).rejects.toMatchObject({
       statusCode: 400,
       code: 'ROL_INVALIDO',
     });
@@ -118,7 +139,7 @@ describe('crearUsuarioPorAdmin (CU01 – alta individual, RF1)', () => {
   test('si falta el estado pendiente en la base responde 500 de configuración', async () => {
     usuarioRepository.buscarIdsPorCodigo.mockResolvedValue({ id_rol: 4, id_estado: null });
 
-    await expect(crearUsuarioPorAdmin(datosAlta())).rejects.toMatchObject({
+    await expect(crearUsuarioPorAdmin(datosAlta(), ACTORES.administrador)).rejects.toMatchObject({
       statusCode: 500,
       code: 'CONFIGURACION_USUARIO_INCOMPLETA',
     });
@@ -127,7 +148,37 @@ describe('crearUsuarioPorAdmin (CU01 – alta individual, RF1)', () => {
   test('propaga los errores inesperados de la base', async () => {
     usuarioRepository.crearPendientePorAdmin.mockRejectedValue(new Error('conexión perdida'));
 
-    await expect(crearUsuarioPorAdmin(datosAlta())).rejects.toThrow('conexión perdida');
+    await expect(crearUsuarioPorAdmin(datosAlta(), ACTORES.administrador)).rejects.toThrow('conexión perdida');
+  });
+
+  test.each([
+    ['staff', 'staff'],
+    ['staff', 'alumno'],
+    ['tutor', 'tutor'],
+    ['administrador', 'administrador'],
+    ['superadmin', 'superadmin'],
+  ])('%s puede crear un usuario %s (rol igual o inferior)', async (actor, rol) => {
+    await crearUsuarioPorAdmin(datosAlta({ rol }), ACTORES[actor]);
+
+    expect(usuarioRepository.crearPendientePorAdmin).toHaveBeenCalled();
+  });
+
+  test('con un rol que no existe responde 400 ROL_INVALIDO (no 403)', async () => {
+    await expect(
+      crearUsuarioPorAdmin(datosAlta({ rol: 'xyz' }), ACTORES.superadmin),
+    ).rejects.toMatchObject({ statusCode: 400, code: 'ROL_INVALIDO' });
+    expect(usuarioRepository.crearPendientePorAdmin).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['tutor', 'staff'],
+    ['staff', 'administrador'],
+    ['administrador', 'superadmin'],
+  ])('%s no puede crear un usuario %s: 403 ROL_SUPERIOR', async (actor, rol) => {
+    await expect(
+      crearUsuarioPorAdmin(datosAlta({ rol }), ACTORES[actor]),
+    ).rejects.toMatchObject({ statusCode: 403, code: 'ROL_SUPERIOR' });
+    expect(usuarioRepository.crearPendientePorAdmin).not.toHaveBeenCalled();
   });
 });
 
@@ -220,6 +271,8 @@ describe('editarUsuarioPorAdmin (CU01 – edición por el administrador, RF1)', 
   });
 
   test('el administrador no puede quitarse a sí mismo el rol (AUTO_CAMBIO_ROL)', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ id: 1, rol: 'administrador' }));
+
     await expect(editarUsuarioPorAdmin(1, { rol: 'staff' }, admin)).rejects.toMatchObject({
       statusCode: 400,
       code: 'AUTO_CAMBIO_ROL',
@@ -228,9 +281,95 @@ describe('editarUsuarioPorAdmin (CU01 – edición por el administrador, RF1)', 
   });
 
   test('el administrador sí puede editar sus otros datos', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ id: 1, rol: 'administrador' }));
+
     await editarUsuarioPorAdmin(1, { nombre: 'Admin', rol: 'administrador' }, admin);
 
     expect(usuarioRepository.actualizar).toHaveBeenCalled();
+  });
+
+  describe('jerarquía de roles', () => {
+    test('un tutor puede cambiar el rol de un alumno hasta tutor', async () => {
+      usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'alumno' }));
+
+      await editarUsuarioPorAdmin(15, { rol: 'tutor' }, ACTORES.tutor);
+
+      expect(usuarioRepository.actualizar).toHaveBeenCalledWith(15, { idRol: 2 });
+    });
+
+    test('un tutor no puede asignar un rol superior al suyo: 403 ROL_SUPERIOR', async () => {
+      usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'alumno' }));
+
+      await expect(
+        editarUsuarioPorAdmin(15, { rol: 'staff' }, ACTORES.tutor),
+      ).rejects.toMatchObject({ statusCode: 403, code: 'ROL_SUPERIOR' });
+      expect(usuarioRepository.actualizar).not.toHaveBeenCalled();
+    });
+
+    test('nadie puede editar a un usuario con rol superior: 403 ROL_SUPERIOR', async () => {
+      usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'superadmin' }));
+
+      await expect(
+        editarUsuarioPorAdmin(15, { nombre: 'X' }, admin),
+      ).rejects.toMatchObject({ statusCode: 403, code: 'ROL_SUPERIOR' });
+      expect(usuarioRepository.actualizar).not.toHaveBeenCalled();
+    });
+
+    test('un administrador puede editar los datos de otro administrador', async () => {
+      usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'administrador' }));
+
+      await editarUsuarioPorAdmin(15, { nombre: 'Otro' }, admin);
+
+      expect(usuarioRepository.actualizar).toHaveBeenCalledWith(15, { nombre: 'Otro' });
+    });
+
+    test.each(['staff', 'tutor'])(
+      '%s puede editar los datos de un alumno',
+      async (actor) => {
+        usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'alumno' }));
+
+        await editarUsuarioPorAdmin(15, { nombre: 'Otro' }, ACTORES[actor]);
+
+        expect(usuarioRepository.actualizar).toHaveBeenCalledWith(15, { nombre: 'Otro' });
+      },
+    );
+
+    test('staff no puede editar los datos de un trabajador: 403 SIN_PERMISO', async () => {
+      usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'tutor' }));
+
+      await expect(
+        editarUsuarioPorAdmin(15, { nombre: 'Otro' }, ACTORES.staff),
+      ).rejects.toMatchObject({ statusCode: 403, code: 'SIN_PERMISO' });
+      expect(usuarioRepository.actualizar).not.toHaveBeenCalled();
+    });
+
+    test('staff sí puede cambiar solo el rol de un trabajador inferior', async () => {
+      usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'tutor' }));
+
+      await editarUsuarioPorAdmin(15, { rol: 'staff' }, ACTORES.staff);
+
+      expect(usuarioRepository.actualizar).toHaveBeenCalledWith(15, { idRol: 2 });
+    });
+
+    test('no se le puede quitar el rol al único superadmin activo: 400 ULTIMO_SUPERADMIN', async () => {
+      usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'superadmin' }));
+      usuarioRepository.contarSuperadminsActivos.mockResolvedValue(0);
+
+      await expect(
+        editarUsuarioPorAdmin(15, { rol: 'administrador' }, ACTORES.superadmin),
+      ).rejects.toMatchObject({ statusCode: 400, code: 'ULTIMO_SUPERADMIN' });
+      expect(usuarioRepository.contarSuperadminsActivos).toHaveBeenCalledWith(15);
+      expect(usuarioRepository.actualizar).not.toHaveBeenCalled();
+    });
+
+    test('si hay otro superadmin activo sí se le puede quitar el rol', async () => {
+      usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'superadmin' }));
+      usuarioRepository.contarSuperadminsActivos.mockResolvedValue(1);
+
+      await editarUsuarioPorAdmin(15, { rol: 'administrador' }, ACTORES.superadmin);
+
+      expect(usuarioRepository.actualizar).toHaveBeenCalled();
+    });
   });
 });
 
@@ -338,6 +477,50 @@ describe('cambiarEstadoPorAdmin (CU01 – flujo 3.b, RF2)', () => {
     },
   );
 
+  test('staff puede suspender a un tutor', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'tutor' }));
+    usuarioRepository.actualizarEstado.mockResolvedValue(usuarioCreado({ estado: 'suspendido' }));
+
+    await cambiarEstadoPorAdmin(15, 'suspendido', ACTORES.staff);
+
+    expect(usuarioRepository.actualizarEstado).toHaveBeenCalledWith(15, 3);
+  });
+
+  test('un tutor no puede cambiar el estado de un staff: 403 ROL_SUPERIOR', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'staff' }));
+
+    await expect(cambiarEstadoPorAdmin(15, 'suspendido', ACTORES.tutor)).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'ROL_SUPERIOR',
+    });
+    expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
+  });
+
+  test.each(['suspendido', 'inactivo', 'dado_de_baja'])(
+    'el único superadmin activo no puede pasar a %s: 400 ULTIMO_SUPERADMIN',
+    async (estado) => {
+      usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'superadmin' }));
+      usuarioRepository.contarSuperadminsActivos.mockResolvedValue(0);
+
+      await expect(cambiarEstadoPorAdmin(15, estado, ACTORES.superadmin)).rejects.toMatchObject({
+        statusCode: 400,
+        code: 'ULTIMO_SUPERADMIN',
+      });
+      expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
+      expect(usuarioRepository.darDeBajaYQuitarDeGrupos).not.toHaveBeenCalled();
+    },
+  );
+
+  test('reactivar a un superadmin no consulta cuántos quedan', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'superadmin', estado: 'suspendido' }));
+    usuarioRepository.actualizarEstado.mockResolvedValue(usuarioCreado({ rol: 'superadmin' }));
+
+    await cambiarEstadoPorAdmin(15, 'activo', ACTORES.superadmin);
+
+    expect(usuarioRepository.contarSuperadminsActivos).not.toHaveBeenCalled();
+    expect(usuarioRepository.actualizarEstado).toHaveBeenCalled();
+  });
+
   test('el administrador no puede cambiar su propio estado', async () => {
     await expect(cambiarEstadoPorAdmin(1, 'inactivo', admin)).rejects.toMatchObject({
       statusCode: 400,
@@ -356,12 +539,12 @@ describe('cambiarEstadoPorAdmin (CU01 – flujo 3.b, RF2)', () => {
     expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
   });
 
-  test('si el estado no está cargado en la base responde 500 de configuración', async () => {
+  test('si el estado no existe en la base responde 400 ESTADO_INVALIDO', async () => {
     usuarioRepository.buscarIdEstadoPorCodigo.mockResolvedValue(null);
 
     await expect(cambiarEstadoPorAdmin(15, 'dado_de_baja', admin)).rejects.toMatchObject({
-      statusCode: 500,
-      code: 'CONFIGURACION_USUARIO_INCOMPLETA',
+      statusCode: 400,
+      code: 'ESTADO_INVALIDO',
     });
     expect(usuarioRepository.actualizarEstado).not.toHaveBeenCalled();
   });
@@ -416,6 +599,34 @@ describe('restablecerPasswordPorAdmin (CU01 – flujo 3.a, RF4)', () => {
     expect(primera.passwordTemporal).not.toBe(segunda.passwordTemporal);
   });
 
+  test('staff puede restablecer la contraseña de un alumno', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'alumno' }));
+
+    await restablecerPasswordPorAdmin(15, ACTORES.staff);
+
+    expect(usuarioRepository.restablecerPasswordTemporal).toHaveBeenCalled();
+  });
+
+  test('staff no puede restablecer la contraseña de un trabajador: 403 SIN_PERMISO', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'tutor' }));
+
+    await expect(restablecerPasswordPorAdmin(15, ACTORES.staff)).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'SIN_PERMISO',
+    });
+    expect(usuarioRepository.restablecerPasswordTemporal).not.toHaveBeenCalled();
+  });
+
+  test('un administrador no puede restablecer la de un superadmin: 403 ROL_SUPERIOR', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'superadmin' }));
+
+    await expect(restablecerPasswordPorAdmin(15, admin)).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'ROL_SUPERIOR',
+    });
+    expect(usuarioRepository.restablecerPasswordTemporal).not.toHaveBeenCalled();
+  });
+
   test('el administrador no puede restablecer su propia contraseña', async () => {
     await expect(restablecerPasswordPorAdmin(1, admin)).rejects.toMatchObject({
       statusCode: 400,
@@ -432,5 +643,26 @@ describe('restablecerPasswordPorAdmin (CU01 – flujo 3.a, RF4)', () => {
       code: 'USUARIO_NO_ENCONTRADO',
     });
     expect(usuarioRepository.restablecerPasswordTemporal).not.toHaveBeenCalled();
+  });
+});
+
+describe('solicitarCambioEmailPorAdmin (jerarquía de roles)', () => {
+  test('staff no puede cambiar el email de un trabajador: 403 SIN_PERMISO', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'tutor' }));
+
+    await expect(
+      solicitarCambioEmailPorAdmin(15, 'nuevo@tumo.world', ACTORES.staff),
+    ).rejects.toMatchObject({ statusCode: 403, code: 'SIN_PERMISO' });
+    expect(authRepository.crearTokenAccion).not.toHaveBeenCalled();
+  });
+
+  test('un tutor puede cambiar el email de un alumno', async () => {
+    usuarioRepository.buscarPorId.mockResolvedValue(usuarioCreado({ rol: 'alumno' }));
+    authRepository.buscarPorEmail.mockResolvedValue(undefined);
+
+    await solicitarCambioEmailPorAdmin(15, 'nuevo@tumo.world', ACTORES.tutor);
+
+    expect(authRepository.crearTokenAccion).toHaveBeenCalled();
+    expect(mailService.enviarEnlaceAccion).toHaveBeenCalledWith('nuevo@tumo.world', expect.any(String), 'cambio_email');
   });
 });

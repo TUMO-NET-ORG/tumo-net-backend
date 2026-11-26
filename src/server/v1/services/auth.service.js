@@ -7,6 +7,7 @@ const {
   enviarEnlaceAccion,
   enviarEnlaceRecuperacion,
 } = require('./mail.service');
+const { vencimientoInvitacion } = require('../utils/invitacion');
 
 const MAX_INTENTOS = 5;
 const DURACION_BLOQUEO_MINUTOS = 15;
@@ -227,7 +228,18 @@ async function verificarEmail(email, codigo) {
 async function solicitarRecuperacion(email) {
   const usuario = await authRepository.buscarPorEmail(email);
 
-  if (!usuario || usuario.estado !== 'activo') {
+  if (!usuario) {
+    return;
+  }
+
+  // Cuenta creada por un trabajador que todavía no se activó: en lugar de un
+  // enlace de recuperación se reenvía la invitación (la anterior pudo vencer).
+  if (usuario.estado === 'pendiente_verificacion') {
+    await reenviarInvitacion(usuario);
+    return;
+  }
+
+  if (usuario.estado !== 'activo') {
     return;
   }
 
@@ -250,6 +262,28 @@ async function solicitarRecuperacion(email) {
       // No se propaga: la respuesta debe ser igual exista o no el email.
       console.error('No se pudo enviar el enlace de recuperación:', error.message);
     }
+  }
+}
+
+// Solo para cuentas que fueron invitadas: las del autorregistro también quedan
+// pendientes, pero se verifican con un código (ver reenviarCodigoVerificacion).
+// La respuesta al cliente es siempre la misma, así que los errores no se propagan.
+async function reenviarInvitacion(usuario) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const creado = await authRepository.renovarInvitacion(
+    usuario.id,
+    hashearCodigo(token),
+    vencimientoInvitacion(),
+  );
+
+  if (!creado) {
+    return;
+  }
+
+  try {
+    await enviarEnlaceAccion(usuario.email, token, 'invitacion');
+  } catch (error) {
+    console.error('No se pudo reenviar la invitación:', error.message);
   }
 }
 
@@ -371,7 +405,7 @@ async function confirmarCambioEmail(token) {
     await authRepository.crearTokenAccion(
       actualizado.usuarioId,
       hashearCodigo(nuevoToken),
-      new Date(Date.now() + DURACION_RECUPERACION_MINUTOS * 60 * 1000),
+      vencimientoInvitacion(),
       'invitacion',
     );
     await enviarEnlaceAccion(actualizado.email, nuevoToken, 'invitacion');

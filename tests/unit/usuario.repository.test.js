@@ -295,3 +295,18 @@ describe('usuarioRepository.darDeBajaYQuitarDeGrupos', () => {
     expect(conexion.release).toHaveBeenCalled();
   });
 });
+
+describe('usuarioRepository.contarSuperadminsActivos', () => {
+  test('cuenta los superadmin activos sin incluir al usuario indicado', async () => {
+    pool.execute.mockResolvedValue([[{ cantidad: 2 }]]);
+
+    const cantidad = await usuarioRepository.contarSuperadminsActivos(15);
+
+    const [sql, params] = pool.execute.mock.calls[0];
+    expect(sql).toContain("r.codigo = 'superadmin'");
+    expect(sql).toContain("e.codigo = 'activo'");
+    expect(sql).toContain('u.id <> ?');
+    expect(params).toEqual([15]);
+    expect(cantidad).toBe(2);
+  });
+});
